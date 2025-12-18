@@ -1,0 +1,30 @@
+{
+    "2011": {
+        "plano": "N",
+        "prazo": 180,
+        "credito_ini": 200000.0,
+        "credito_fim": 500000.0,
+        "passo": 10000.0,
+        "novo_arquivo": false
+    },
+    "5121": {
+        "plano": "N",
+        "prazo": 106,
+        "credito_ini": 80000.0,
+        "credito_fim": 110000.0,
+        "passo": 10000.0,
+        "novo_arquivo": false
+    },
+    "esp": {
+        "id_tabela": "carro5121natal2",
+        "nome_real": "Carro Natal 5121",
+        "plano_tipo": "N",
+        "adm": 15.0,
+        "seguro": 0.059,
+        "prazo": 106,
+        "credito_ini": 80000.0,
+        "credito_fim": 110000.0,
+        "passo": 10000.0,
+        "novo_arquivo": false
+    }
+}
