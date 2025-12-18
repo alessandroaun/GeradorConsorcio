@@ -1,31 +1,28 @@
 {
     "2011": {
-        "plano": "SL",
-        "prazo": 198,
+        "plano": "N",
+        "prazo": 230,
         "credito_ini": 200000.0,
-        "credito_fim": 500000.0,
-        "passo": 10000.0,
-        "novo_arquivo": false
+        "credito_fim": 300000.0,
+        "passo": 10000.0
     },
     "5121": {
-        "plano": "L",
-        "prazo": 103,
+        "plano": "N",
+        "prazo": 110,
         "credito_ini": 80000.0,
         "credito_fim": 110000.0,
-        "passo": 10000.0,
-        "novo_arquivo": false
+        "passo": 10000.0
     },
     "esp": {
-        "id_tabela": "carro5121natal51112",
-        "nome_real": "Carro Natal 5121212123",
-        "plano_tipo": "LIGHT",
+        "id_tabela": "carro_natal",
+        "nome_real": "Carro Natal",
+        "plano_tipo": "SL",
         "adm": 16.0,
-        "seguro": 0.084,
+        "seguro": 0.059,
         "prazo": 106,
         "credito_ini": 80000.0,
         "credito_fim": 110000.0,
         "passo": 10000.0,
-        "novo_arquivo": false,
-        "apenas_csv": true
+        "apenas_csv": false
     }
 }
