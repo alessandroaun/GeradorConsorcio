@@ -32,7 +32,7 @@ OutputDir=.\Output_Instalador
 OutputBaseFilename=Instalador_GerenciadorSimuladorRecon_v1
 
 ; Ícone do instalador (se tiver um .ico, descomente a linha abaixo)
-SetupIconFile="C:\Users\aless\Desktop\SoftRecon\GeradorConsorcio\logo_app_recon.ico"
+SetupIconFile="C:\Users\aless\Desktop\SoftRecon\GeradorConsorcio\logo_recon-consorcio.ico"
 
 ; Compressão
 Compression=lzma

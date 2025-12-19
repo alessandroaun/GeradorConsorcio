@@ -12,6 +12,7 @@ BUCKET_NAME = "consorciorecon-json"
 FILE_DADOS = "dados_consorcio.json"
 FILE_ESTATISTICAS = "estatisticas_grupos.json"
 FILE_RELACAO = "relacao_grupos.json"
+FILE_HISTORICO = "historico_assembleias.json" # <--- NOVO ARQUIVO
 
 # Inicializa Cliente (Singleton simples)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -30,6 +31,7 @@ def download_json_supabase(filename):
         # Se falhar (arquivo não existe), retorna estrutura vazia baseada no tipo
         if filename == FILE_ESTATISTICAS: return []
         if filename == FILE_RELACAO: return []
+        if filename == FILE_HISTORICO: return [] # <--- Tratamento para o novo arquivo
         return {"metadata": [], "data": {}}
 
 def upload_json_supabase(filename, data):
@@ -85,7 +87,7 @@ def salvar_dados_tabelas(chave_tabela, novos_dados, metadata_item=None):
 
 def atualizar_estatisticas_json(novos_dados_lista):
     """
-    Lê estatisticas_grupos.json da nuvem, mescla e salva.
+    Lê estatisticas_grupos.json da nuvem, mescla (sobrescreve pelo Grupo ID) e salva.
     """
     if not novos_dados_lista: return 0, 0
 
@@ -116,6 +118,61 @@ def atualizar_estatisticas_json(novos_dados_lista):
     upload_json_supabase(FILE_ESTATISTICAS, lista_final)
     
     return count_novos, count_atualizados
+
+def atualizar_historico_assembleias(novos_dados_pdf):
+    """
+    NOVA FUNÇÃO:
+    Baixa o histórico, adiciona novos registros verificando duplicidade
+    (Chave única: Grupo + Assembleia) e sobe novamente.
+    Permite múltiplos registros do mesmo grupo, desde que em assembleias diferentes.
+    """
+    if not novos_dados_pdf: return 0, 0
+
+    # 1. Baixar histórico atual
+    historico_atual = download_json_supabase(FILE_HISTORICO)
+    if not isinstance(historico_atual, list):
+        historico_atual = []
+
+    registros_adicionados = 0
+    registros_atualizados = 0
+
+    # 2. Processar cada item extraído do PDF
+    for novo_item in novos_dados_pdf:
+        grupo_novo = str(novo_item.get('Grupo', '')).strip()
+        assembleia_nova = str(novo_item.get('Assembleia', '')).strip() # Data ou ID da assembleia
+
+        if not grupo_novo or not assembleia_nova:
+            continue # Pula se não tiver dados identificadores
+
+        encontrado = False
+        
+        # Procura se já existe esse Grupo naquela Assembleia específica
+        for i, item_hist in enumerate(historico_atual):
+            grupo_hist = str(item_hist.get('Grupo', '')).strip()
+            assembleia_hist = str(item_hist.get('Assembleia', '')).strip()
+
+            if grupo_hist == grupo_novo and assembleia_hist == assembleia_nova:
+                # JÁ EXISTE: Atualiza os dados (caso tenha mudado algo na leitura)
+                historico_atual[i] = novo_item
+                registros_atualizados += 1
+                encontrado = True
+                break
+        
+        if not encontrado:
+            # NÃO EXISTE: Adiciona ao histórico (Append)
+            historico_atual.append(novo_item)
+            registros_adicionados += 1
+
+    # 3. Ordenar (Por Grupo e depois por Assembleia)
+    try:
+        historico_atual.sort(key=lambda x: (int(x.get('Grupo', 0)), x.get('Assembleia', '')))
+    except:
+        pass
+
+    # 4. Upload de volta para o Supabase
+    upload_json_supabase(FILE_HISTORICO, historico_atual)
+    
+    return registros_adicionados, registros_atualizados
 
 # --- CONFIG LOCAL (Mantido localmente pois é config do APP, não dado do sistema) ---
 CONFIG_FILE = "config.json"

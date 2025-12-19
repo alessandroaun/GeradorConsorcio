@@ -9,9 +9,10 @@ from gerador import calcular_simulacao
 from json_utils import (
     salvar_config, carregar_config, 
     atualizar_estatisticas_json, 
+    atualizar_historico_assembleias, # <--- ADICIONE ESTE IMPORT
     carregar_dados_tabelas, salvar_dados_tabelas,
     download_json_supabase, upload_json_supabase,
-    FILE_RELACAO, FILE_DADOS
+    FILE_RELACAO, FILE_DADOS, FILE_HISTORICO # <--- ADICIONE FILE_HISTORICO SE QUISER EXIBIR NO LOG
 )
 from pdf_processor import extrair_dados_pdf
 from login import LoginWindow 
@@ -350,7 +351,7 @@ class ConsorcioApp:
         btn_frame = ttk.Frame(content, style="Main.TFrame")
         btn_frame.pack(fill='x', pady=10)
         ttk.Button(btn_frame, text="💾 SALVAR LOCALMENTE", style="Sec.TButton", command=self.gerar_especial_local).pack(side='left', fill='x', expand=True, padx=(0, 5), ipady=5)
-        ttk.Button(btn_frame, text="⬆️ ATUALIZAR TABELA AGORA", style="Action.TButton", command=self.gerar_especial).pack(side='right', fill='x', expand=True, padx=(5, 0), ipady=5)
+        ttk.Button(btn_frame, text="CRIAR NOVA TABELA AGORA", style="Action.TButton", command=self.gerar_especial).pack(side='right', fill='x', expand=True, padx=(5, 0), ipady=5)
 
     # --- ABA EDITOR JSON ---
     def setup_tab_editor(self):
@@ -633,14 +634,33 @@ class ConsorcioApp:
     def _thread_pdf_cloud(self, pdf_path):
         self.log_pdf("Extraindo dados do PDF...")
         dados = extrair_dados_pdf(pdf_path, callback_log=self.log_pdf)
-        if not dados: self.log_pdf("❌ Falha na extração."); return
-        self.log_pdf(f"✅ {len(dados)} grupos encontrados. Baixando do servidor...")
+        
+        if not dados: 
+            self.log_pdf("❌ Falha na extração ou PDF vazio.")
+            return
+
+        self.log_pdf(f"✅ {len(dados)} registros extraídos. Iniciando sincronização...")
+
         try:
+            # 1. Atualiza estatisticas_grupo.json (Estado Atual)
+            self.log_pdf("Atualizando status atual dos grupos...")
             novos, atualizados = atualizar_estatisticas_json(dados)
-            self.log_pdf(f"RESULTADO: +{novos} Novos | ⟳{atualizados} Atualizados")
-            self.log_pdf(f"Enviado para: {FILE_RELACAO} (Servidor)")
-            messagebox.showinfo("Concluído", f"Servidor Atualizado!\nNovos: {novos}\nAtualizados: {atualizados}")
-        except Exception as e: self.log_pdf(f"❌ Erro de Servidor: {str(e)}")
+            self.log_pdf(f"STATUS ATUAL: +{novos} Novos | ⟳{atualizados} Atualizados")
+            
+            # 2. Atualiza historico_assembleias.json (Histórico Temporal)
+            self.log_pdf("Atualizando histórico de assembleias...")
+            add_hist, up_hist = atualizar_historico_assembleias(dados)
+            self.log_pdf(f"HISTÓRICO: +{add_hist} Registros de Tempo | ⟳{up_hist} Corrigidos")
+
+            messagebox.showinfo("Concluído", 
+                                f"Sincronização Finalizada!\n\n"
+                                f"Status Atual: {novos} novos / {atualizados} atz\n"
+                                f"Histórico: {add_hist} novos / {up_hist} atz")
+
+        except Exception as e:
+            self.log_pdf(f"❌ Erro de Sincronização: {str(e)}")
+            # Imprime o erro completo no console para debug se necessário
+            print(e)
 
     def _thread_pdf_local(self, pdf_path):
         self.log_pdf("Extraindo dados do PDF (Modo Local)...")
@@ -654,34 +674,64 @@ class ConsorcioApp:
         except Exception as e: self.log_pdf(f"❌ Erro ao salvar: {e}")
 
     # --- ABA RELAÇÃO (CLOUD & LOCAL) ---
+    # --- ABA RELAÇÃO (CLOUD & LOCAL) ---
     def setup_tab_relacao(self):
-        content = ttk.Frame(self.tab_relacao, style="Main.TFrame", padding=10); content.pack(fill='both', expand=True)
-        top_bar = ttk.Frame(content, style="Main.TFrame"); top_bar.pack(fill='x', pady=(0, 10))
+        content = ttk.Frame(self.tab_relacao, style="Main.TFrame", padding=10)
+        content.pack(fill='both', expand=True)
+        
+        # Barra Superior (Upload/Download)
+        top_bar = ttk.Frame(content, style="Main.TFrame")
+        top_bar.pack(fill='x', pady=(0, 10))
         ttk.Button(top_bar, text="⬇️ Carregar Relação de Grupos", style="Sec.TButton", command=self.relacao_carregar_nuvem).pack(side='left', padx=(0, 5))
-        self.lbl_relacao_status = ttk.Label(top_bar, text="...", foreground=COLOR_TEXT_SUB); self.lbl_relacao_status.pack(side='left', padx=5)
+        self.lbl_relacao_status = ttk.Label(top_bar, text="...", foreground=COLOR_TEXT_SUB)
+        self.lbl_relacao_status.pack(side='left', padx=5)
         ttk.Button(top_bar, text="💾 Salvar Local", style="Sec.TButton", command=self.relacao_salvar_local).pack(side='right', padx=(5, 0))
         ttk.Button(top_bar, text="☁️ ENVIAR", style="Action.TButton", command=self.relacao_salvar_nuvem).pack(side='right', padx=(5, 0))
         ttk.Button(top_bar, text="↩ Desfazer", style="Warning.TButton", command=self.relacao_reverter).pack(side='right')
-        paned = tk.PanedWindow(content, orient=tk.HORIZONTAL, bg=COLOR_BG, sashwidth=4, showhandle=True); paned.pack(fill='both', expand=True)
-        frame_list = ttk.Frame(paned, style="Main.TFrame"); paned.add(frame_list, width=220)
-        btn_grp_frame = ttk.Frame(frame_list, style="Main.TFrame"); btn_grp_frame.pack(fill='x', pady=(0, 5))
+        
+        # Painel Dividido (Lista | Detalhes)
+        paned = tk.PanedWindow(content, orient=tk.HORIZONTAL, bg=COLOR_BG, sashwidth=4, showhandle=True)
+        paned.pack(fill='both', expand=True)
+        
+        # Coluna Esquerda: Lista de Grupos
+        frame_list = ttk.Frame(paned, style="Main.TFrame")
+        paned.add(frame_list, width=220)
+        
+        btn_grp_frame = ttk.Frame(frame_list, style="Main.TFrame")
+        btn_grp_frame.pack(fill='x', pady=(0, 5))
         ttk.Button(btn_grp_frame, text="➕ Novo Grupo", style="Sec.TButton", command=self.relacao_novo_grupo).pack(side='left', fill='x', expand=True, padx=(0,2))
         ttk.Button(btn_grp_frame, text="🗑️ Excluir Grupo", style="Danger.TButton", command=self.relacao_excluir_grupo).pack(side='right', fill='x', expand=True, padx=(2,0))
-        scroll_lst = ttk.Scrollbar(frame_list); scroll_lst.pack(side='right', fill='y')
+        
+        scroll_lst = ttk.Scrollbar(frame_list)
+        scroll_lst.pack(side='right', fill='y')
         self.lst_grupos = tk.Listbox(frame_list, font=("Segoe UI", 9), borderwidth=1, relief="solid", yscrollcommand=scroll_lst.set)
-        self.lst_grupos.pack(side='left', fill='both', expand=True); scroll_lst.config(command=self.lst_grupos.yview)
+        self.lst_grupos.pack(side='left', fill='both', expand=True)
+        scroll_lst.config(command=self.lst_grupos.yview)
         self.lst_grupos.bind('<<ListboxSelect>>', self.relacao_selecionar_grupo)
-        right_panel = ttk.Frame(paned, style="Main.TFrame", padding=(10, 0, 0, 0)); paned.add(right_panel)
-        toolbar_fields = ttk.LabelFrame(right_panel, text="Dados", style="Card.TLabelframe", padding=5); toolbar_fields.pack(fill='x', pady=(0, 5))
+        
+        # Coluna Direita: Campos Dinâmicos
+        right_panel = ttk.Frame(paned, style="Main.TFrame", padding=(10, 0, 0, 0))
+        paned.add(right_panel)
+        
+        toolbar_fields = ttk.LabelFrame(right_panel, text="Adicione ou Remova Campos de Informações", style="Card.TLabelframe", padding=5)
+        toolbar_fields.pack(fill='x', pady=(0, 5))
+        
+        # --- BOTÕES DE CAMPOS (ALTERADO AQUI) ---
         ttk.Button(toolbar_fields, text="➕ Add Global", style="Sec.TButton", command=self.relacao_add_global_field).pack(side='left', padx=(0, 5))
+        ttk.Button(toolbar_fields, text="➕ Add Local", style="Sec.TButton", command=self.relacao_add_local_field).pack(side='left', padx=(0, 5)) # <--- NOVO
+        
         ttk.Button(toolbar_fields, text="➖ Del Global", style="Warning.TButton", command=self.relacao_del_global_field).pack(side='right', padx=(5, 0))
         ttk.Button(toolbar_fields, text="➖ Del Local", style="Sec.TButton", command=self.relacao_del_local_field).pack(side='right')
-        self.canvas_relacao = tk.Canvas(right_panel, bg=COLOR_BG, highlightthickness=0); scroll_y = ttk.Scrollbar(right_panel, orient="vertical", command=self.canvas_relacao.yview)
+        # ----------------------------------------
+        
+        self.canvas_relacao = tk.Canvas(right_panel, bg=COLOR_BG, highlightthickness=0)
+        scroll_y = ttk.Scrollbar(right_panel, orient="vertical", command=self.canvas_relacao.yview)
         self.frame_dynamic_fields = ttk.Frame(self.canvas_relacao, style="Main.TFrame")
         self.frame_dynamic_fields.bind("<Configure>", lambda e: self.canvas_relacao.configure(scrollregion=self.canvas_relacao.bbox("all")))
         self.canvas_relacao.create_window((0, 0), window=self.frame_dynamic_fields, anchor="nw")
         self.canvas_relacao.configure(yscrollcommand=scroll_y.set)
-        self.canvas_relacao.pack(side="left", fill="both", expand=True); scroll_y.pack(side="right", fill="y")
+        self.canvas_relacao.pack(side="left", fill="both", expand=True)
+        scroll_y.pack(side="right", fill="y")
 
     # --- Lógica Relação ---
     def relacao_carregar_nuvem(self):
@@ -783,16 +833,39 @@ class ConsorcioApp:
 
     def relacao_add_global_field(self):
         if not self.relacao_data: return
-        field_name = simpledialog.askstring("Novo Campo", "Nome da Chave:")
+        field_name = simpledialog.askstring("Novo Campo", "Digite o nome do campo:")
         if not field_name: return
         for grp in self.relacao_data:
             if field_name not in self.relacao_data[grp]: self.relacao_data[grp][field_name] = ""
         if self.relacao_selected_grupo: self.lst_grupos.event_generate("<<ListboxSelect>>")
 
+    def relacao_add_local_field(self):
+        """Adiciona um campo APENAS no grupo selecionado atualmente"""
+        if not self.relacao_selected_grupo: 
+            messagebox.showwarning("Aviso", "Selecione um grupo primeiro.")
+            return
+        
+        # Salva o que já foi digitado nos outros campos antes de atualizar a tela
+        self.relacao_atualizar_memoria()
+
+        field_name = simpledialog.askstring("Novo Campo Local", "Digite o nome do campo:")
+        if not field_name: return
+        
+        # Verifica se já existe neste grupo
+        if field_name in self.relacao_data[self.relacao_selected_grupo]:
+            messagebox.showwarning("Erro", "Este campo já existe neste grupo.")
+            return
+
+        # Adiciona o campo vazio apenas neste grupo
+        self.relacao_data[self.relacao_selected_grupo][field_name] = ""
+        
+        # Atualiza a visualização
+        self._renderizar_campos_grupo(self.relacao_selected_grupo)
+
     def relacao_del_global_field(self):
         if not self.relacao_data: return
         self.relacao_atualizar_memoria()
-        field_name = simpledialog.askstring("Excluir Global", "Nome da Chave:")
+        field_name = simpledialog.askstring("Excluir Global", "Digite o nome do campo:")
         if not field_name: return
         if field_name == "Grupo": return
         count = 0
@@ -805,7 +878,7 @@ class ConsorcioApp:
     def relacao_del_local_field(self):
         if not self.relacao_selected_grupo: return
         self.relacao_atualizar_memoria()
-        field_name = simpledialog.askstring("Excluir Local", "Nome da Chave:")
+        field_name = simpledialog.askstring("Excluir Local", "Digite o nome do campo:")
         if not field_name: return
         if field_name == "Grupo": return
         dados = self.relacao_data[self.relacao_selected_grupo]

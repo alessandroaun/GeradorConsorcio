@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['logo_app_recon.ico'],
+    icon=['logo_recon-consorcio.png'],
 )
