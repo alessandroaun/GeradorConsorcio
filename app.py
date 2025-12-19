@@ -48,11 +48,9 @@ class ConsorcioApp:
 
             menu_admin = tk.Menu(menubar, tearoff=0)
             menubar.add_cascade(label="Administração 🔒", menu=menu_admin)
-            # ... (código existente do menu) ...
             menu_admin.add_command(label="➕ Cadastrar Usuário", command=self.abrir_janela_cadastro)
-            menu_admin.add_command(label="🔄 Resetar Senha (Padrão)", command=self.abrir_janela_reset) # <--- NOVO
+            menu_admin.add_command(label="🔄 Resetar Senha (Padrão)", command=self.abrir_janela_reset)
             menu_admin.add_command(label="❌ Bloquear Usuário", command=self.abrir_janela_exclusao)
-            # ...
             menu_admin.add_separator()
             menu_admin.add_command(label="Sair", command=root.quit)
         # -------------------------------------------
@@ -214,7 +212,8 @@ class ConsorcioApp:
                 messagebox.showerror("Erro", msg, parent=top)
 
         ttk.Button(top, text="SALVAR", style="Action.TButton", command=salvar_novo).pack(fill='x', padx=20, pady=10)
-# --- ADMINISTRAÇÃO: RESET DE SENHA ---
+
+    # --- ADMINISTRAÇÃO: RESET DE SENHA ---
     def abrir_janela_reset(self):
         top = tk.Toplevel(self.root)
         top.title("Resetar Senha")
@@ -259,6 +258,7 @@ class ConsorcioApp:
                     messagebox.showerror("Erro", msg, parent=top)
 
         ttk.Button(top, text="RESETAR SENHA", style="Warning.TButton", command=confirmar_reset).pack(fill='x', padx=20, pady=15)
+
     # --- ADMINISTRAÇÃO: EXCLUSÃO ---
     def abrir_janela_exclusao(self):
         top = tk.Toplevel(self.root)
@@ -356,6 +356,8 @@ class ConsorcioApp:
     def setup_tab_editor(self):
         content = ttk.Frame(self.tab_editor, style="Main.TFrame", padding=10)
         content.pack(fill='both', expand=True)
+        
+        # --- Barra Superior ---
         top_bar = ttk.Frame(content, style="Main.TFrame")
         top_bar.pack(fill='x', pady=(0, 10))
         ttk.Button(top_bar, text="⬇️ Carregar Tabelas Atuais", style="Sec.TButton", command=self.editor_carregar_nuvem).pack(side='left', padx=(0, 5))
@@ -364,19 +366,42 @@ class ConsorcioApp:
         ttk.Button(top_bar, text="💾 Salvar Local", style="Sec.TButton", command=self.editor_salvar_local).pack(side='right', padx=(5, 0))
         ttk.Button(top_bar, text="☁️ ENVIAR", style="Action.TButton", command=self.editor_salvar_nuvem).pack(side='right', padx=(5, 0))
         ttk.Button(top_bar, text="↩ Desfazer", style="Warning.TButton", command=self.editor_reverter).pack(side='right')
+        
+        # --- Painel Dividido ---
         paned = tk.PanedWindow(content, orient=tk.HORIZONTAL, bg=COLOR_BG, sashwidth=4, showhandle=True)
         paned.pack(fill='both', expand=True)
+        
+        # === COLUNA DA ESQUERDA (LISTA + BOTÕES) ===
         frame_list = ttk.Frame(paned, style="Main.TFrame")
         paned.add(frame_list, width=200)
-        ttk.Label(frame_list, text="TABELAS (dados_consorcio)", font=("Segoe UI", 8, "bold"), foreground=COLOR_TEXT_SUB).pack(anchor='w', pady=(0, 5))
-        scroll_lst = ttk.Scrollbar(frame_list)
+        
+        # 1. Título
+        ttk.Label(frame_list, text="TABELAS (dados_consorcio)", font=("Segoe UI", 8, "bold"), foreground=COLOR_TEXT_SUB).pack(side='top', anchor='w', pady=(0, 5))
+        
+        # 2. Container para Lista e Scrollbar (Para isolar o layout)
+        list_container = ttk.Frame(frame_list)
+        list_container.pack(side='top', fill='both', expand=True)
+
+        scroll_lst = ttk.Scrollbar(list_container)
         scroll_lst.pack(side='right', fill='y')
-        self.lst_tabelas = tk.Listbox(frame_list, font=("Segoe UI", 9), borderwidth=1, relief="solid", yscrollcommand=scroll_lst.set)
+        
+        self.lst_tabelas = tk.Listbox(list_container, font=("Segoe UI", 9), borderwidth=1, relief="solid", yscrollcommand=scroll_lst.set)
         self.lst_tabelas.pack(side='left', fill='both', expand=True)
         scroll_lst.config(command=self.lst_tabelas.yview)
         self.lst_tabelas.bind('<<ListboxSelect>>', self.editor_selecionar_tabela)
+
+        # 3. Botões de Mover (Abaixo do container da lista)
+        btn_move_frame = ttk.Frame(frame_list, style="Main.TFrame")
+        btn_move_frame.pack(side='top', fill='x', pady=5) # side='top' garante que fique logo abaixo da lista
+        
+        ttk.Button(btn_move_frame, text="▲ Cima", style="Sec.TButton", command=self.editor_mover_cima).pack(side='left', fill='x', expand=True, padx=(0, 2))
+        ttk.Button(btn_move_frame, text="▼ Baixo", style="Sec.TButton", command=self.editor_mover_baixo).pack(side='left', fill='x', expand=True, padx=(2, 0))
+
+        # === COLUNA DA DIREITA (EDIÇÃO) ===
         self.frame_edit = ttk.Frame(paned, style="Main.TFrame", padding=(10, 0, 0, 0))
         paned.add(self.frame_edit)
+        
+        # Metadados
         lf_meta = ttk.LabelFrame(self.frame_edit, text="DADOS BÁSICOS", style="Card.TLabelframe", padding=10)
         lf_meta.pack(fill='x', pady=(0, 10))
         self.add_linha_compacta(lf_meta, "ID da tabela", self.vars['editor']['id'], 0, 0, "texto", width=20)
@@ -386,21 +411,26 @@ class ConsorcioApp:
         self.add_linha_compacta(lf_meta, "Taxa de administração", self.vars['editor']['adm'], 2, 0, "texto")
         self.add_linha_compacta(lf_meta, "Seguro de vida", self.vars['editor']['seguro'], 2, 1, "texto")
         lf_meta.columnconfigure(0, weight=1); lf_meta.columnconfigure(1, weight=1)
+        
         btn_meta = ttk.Frame(lf_meta, style="Main.TFrame")
         btn_meta.grid(row=3, column=0, columnspan=2, pady=(10, 0), sticky='ew')
         ttk.Button(btn_meta, text="Salvar Dados", style="Sec.TButton", command=self.editor_atualizar_metadados).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(btn_meta, text="Converter p/ Seguro Obrigatório", style="Warning.TButton", command=self.editor_converter_seguro).pack(side='left', fill='x', expand=True, padx=5)
         ttk.Button(btn_meta, text="Excluir Tabela", style="Danger.TButton", command=self.editor_excluir_tabela).pack(side='right', fill='x', expand=True, padx=(5, 0))
+        
+        # Treeview (Dados)
         lf_data = ttk.LabelFrame(self.frame_edit, text="CRÉDITOS (Expanda para ver prazos)", style="Card.TLabelframe", padding=10)
         lf_data.pack(fill='both', expand=True)
         self.tree_data = ttk.Treeview(lf_data, columns=("detalhes"), show='tree headings', height=8)
         self.tree_data.heading("#0", text="Crédito / Prazo")
         self.tree_data.heading("detalhes", text="Valores das Parcelas")
         self.tree_data.column("#0", width=100); self.tree_data.column("detalhes", width=200)
+        
         scroll_tree = ttk.Scrollbar(lf_data, orient="vertical", command=self.tree_data.yview)
         self.tree_data.configure(yscrollcommand=scroll_tree.set)
         self.tree_data.pack(side='left', fill='both', expand=True)
         scroll_tree.pack(side='right', fill='y')
+        
         ttk.Button(lf_data, text="Excluir Item\nSelecionado", style="Danger.TButton", command=self.editor_excluir_item).pack(side='top', fill='x', pady=(5, 0))
 
     # --- Lógica Editor ---
@@ -436,6 +466,38 @@ class ConsorcioApp:
         if not self.editor_data: return
         if "metadata" in self.editor_data:
             for item in self.editor_data["metadata"]: self.lst_tabelas.insert(tk.END, item.get("id", "?"))
+
+    # --- NOVAS FUNÇÕES: MOVER ITENS NA LISTA ---
+    def editor_mover_cima(self):
+        sel = self.lst_tabelas.curselection()
+        if not sel: return
+        idx = sel[0]
+        if idx == 0: return # Já está no topo
+
+        # Troca na lista de metadados
+        meta = self.editor_data["metadata"]
+        meta[idx], meta[idx-1] = meta[idx-1], meta[idx]
+        
+        # Atualiza UI e mantém seleção
+        self.editor_refresh_lista()
+        self.lst_tabelas.selection_set(idx-1)
+        self.lst_tabelas.see(idx-1)
+
+    def editor_mover_baixo(self):
+        sel = self.lst_tabelas.curselection()
+        if not sel: return
+        idx = sel[0]
+        meta = self.editor_data["metadata"]
+        if idx >= len(meta) - 1: return # Já está em baixo
+
+        # Troca na lista de metadados
+        meta[idx], meta[idx+1] = meta[idx+1], meta[idx]
+
+        # Atualiza UI e mantém seleção
+        self.editor_refresh_lista()
+        self.lst_tabelas.selection_set(idx+1)
+        self.lst_tabelas.see(idx+1)
+    # --------------------------------------------
 
     def editor_selecionar_tabela(self, event):
         sel = self.lst_tabelas.curselection()
