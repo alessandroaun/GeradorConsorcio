@@ -1,6 +1,6 @@
 {
     "2011": {
-        "plano": "N",
+        "plano": "SL",
         "prazo": 230,
         "credito_ini": 200000.0,
         "credito_fim": 300000.0,
@@ -14,10 +14,10 @@
         "passo": 10000.0
     },
     "esp": {
-        "id_tabela": "carro_natal",
-        "nome_real": "Carro Natal",
-        "plano_tipo": "SL",
-        "adm": 16.0,
+        "id_tabela": "carro_natal3",
+        "nome_real": "Carro Natal3",
+        "plano_tipo": "LIGHT",
+        "adm": 19.0,
         "seguro": 0.059,
         "prazo": 106,
         "credito_ini": 80000.0,
