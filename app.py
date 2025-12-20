@@ -125,7 +125,7 @@ class ConsorcioApp:
 
     def init_vars(self, tipo):
         saved = self.last_config.get(tipo, {}) if self.last_config else {}
-        defaults = ('N', 180, 200000.0, 500000.0, 10000.0) if tipo == '2011' else ('N', 106, 80000.0, 110000.0, 10000.0)
+        defaults = ('N', 201, 200000.0, 300000.0, 10000.0) if tipo == '2011' else ('N', 106, 80000.0, 110000.0, 10000.0)
         return {
             'plano': tk.StringVar(value=saved.get('plano', defaults[0])),
             'prazo': tk.IntVar(value=saved.get('prazo', defaults[1])),
@@ -137,14 +137,14 @@ class ConsorcioApp:
     def init_vars_especial(self):
         saved = self.last_config.get('esp', {}) if self.last_config else {}
         return {
-            'id_tabela': tk.StringVar(value=saved.get('id_tabela', "custom01")), 
-            'nome_real': tk.StringVar(value=saved.get('nome_real', "Minha Tabela")), 
+            'id_tabela': tk.StringVar(value=saved.get('id_tabela', "nomedatabela")), 
+            'nome_real': tk.StringVar(value=saved.get('nome_real', "Insira o nome da tabela aqui")), 
             'plano_tipo': tk.StringVar(value=saved.get('plano_tipo', "N")), 
             'adm': tk.DoubleVar(value=saved.get('adm', 25.0)),
             'seguro': tk.DoubleVar(value=saved.get('seguro', 0.059)),
-            'prazo': tk.IntVar(value=saved.get('prazo', 180)),
-            'credito_ini': tk.DoubleVar(value=saved.get('credito_ini', 200000.0)),
-            'credito_fim': tk.DoubleVar(value=saved.get('credito_fim', 500000.0)),
+            'prazo': tk.IntVar(value=saved.get('prazo', 201)),
+            'credito_ini': tk.DoubleVar(value=saved.get('credito_ini', 200000)),
+            'credito_fim': tk.DoubleVar(value=saved.get('credito_fim', 300000)),
             'passo': tk.DoubleVar(value=saved.get('passo', 10000.0)),
             'apenas_csv': tk.BooleanVar(value=saved.get('apenas_csv', False))
         }
@@ -516,7 +516,12 @@ class ConsorcioApp:
         for i, r in enumerate(rows):
             credito = r.get('credito', 0); cred_fmt = f"R$ {credito:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             parent_id = self.tree_data.insert("", "end", iid=f"c_{i}", text=cred_fmt, values=("Expandir",), open=False)
-            prazos = r.get('prazos', []); prazos.sort(key=lambda x: x.get('prazo', 0))
+            prazos = r.get('prazos', []); 
+            
+            # --- CORREÇÃO AQUI: ORDENAR DECRESCENTE (reverse=True) ---
+            prazos.sort(key=lambda x: x.get('prazo', 0), reverse=True) 
+            # ---------------------------------------------------------
+            
             for j, p in enumerate(prazos):
                 prazo_meses = p.get('prazo', 0); val_unico = p.get('parcela', None); val_csv = p.get('parcela_CSV', 0); val_ssv = p.get('parcela_SSV', None)
                 if val_unico is not None: detalhe = f"Parcela: R$ {val_unico:.2f}"
