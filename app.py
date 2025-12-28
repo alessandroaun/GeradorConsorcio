@@ -543,12 +543,59 @@ class ConsorcioApp:
                 self.tree_data.insert(parent_id, "end", iid=f"p_{i}_{j}", text=f"{prazo_meses}m", values=(detalhe,))
 
     def editor_atualizar_metadados(self):
-        if not self.selected_table_id: return
+        old_id = self.selected_table_id
+        if not old_id: return
+        
+        # Captura novos valores
+        new_id = self.vars['editor']['id'].get().strip()
+        new_name = self.vars['editor']['name'].get().strip()
+        
+        # Validação básica
+        if not new_id or not new_name:
+            messagebox.showwarning("Aviso", "ID e Nome da tabela são obrigatórios.")
+            return
+
+        # Verificar duplicidade se o ID mudou
+        if new_id != old_id:
+            existe = any(m["id"] == new_id for m in self.editor_data["metadata"] if m["id"] != old_id)
+            if existe:
+                messagebox.showerror("Erro", f"O ID '{new_id}' já está sendo usado em outra tabela.")
+                return
+
+        # 1. Atualiza METADADOS
+        found = False
         for m in self.editor_data["metadata"]:
-            if m["id"] == self.selected_table_id:
-                m["name"] = self.vars['editor']['name'].get(); m["category"] = self.vars['editor']['category'].get(); m["plan"] = self.vars['editor']['plan'].get()
-                m["taxaAdmin"] = self.vars['editor']['adm'].get(); m["seguroPct"] = self.vars['editor']['seguro'].get()
-                messagebox.showinfo("OK", "Dados Salvos. Clique em ENVIAR para atualizar ONLINE."); return
+            if m["id"] == old_id:
+                m["id"] = new_id # Atualiza o ID
+                m["name"] = new_name # Atualiza o Nome
+                m["category"] = self.vars['editor']['category'].get()
+                m["plan"] = self.vars['editor']['plan'].get()
+                m["taxaAdmin"] = self.vars['editor']['adm'].get()
+                m["seguroPct"] = self.vars['editor']['seguro'].get()
+                found = True
+                break
+        
+        if not found: return
+
+        # 2. Atualiza a chave no dicionário DATA se o ID mudou
+        if new_id != old_id:
+            if old_id in self.editor_data["data"]:
+                self.editor_data["data"][new_id] = self.editor_data["data"].pop(old_id)
+            
+            # Atualiza referência e lista
+            self.selected_table_id = new_id
+            self.editor_refresh_lista()
+            
+            # Tenta reselecionar o novo ID na lista para manter o foco
+            items = self.lst_tabelas.get(0, tk.END)
+            try:
+                idx = items.index(new_id)
+                self.lst_tabelas.selection_clear(0, tk.END)
+                self.lst_tabelas.selection_set(idx)
+                self.lst_tabelas.see(idx)
+            except: pass
+
+        messagebox.showinfo("OK", "Dados Salvos (ID/Nome/Taxas atualizados).\nClique em ENVIAR para atualizar ONLINE.")
 
     def editor_converter_seguro(self):
         t_id = self.selected_table_id
