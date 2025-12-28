@@ -4,15 +4,16 @@ import threading
 import os
 import copy
 import json
+from datetime import datetime  # <--- IMPORT ADICIONADO PARA DATA DE ATUALIZAÇÃO
 
 from gerador import calcular_simulacao
 from json_utils import (
     salvar_config, carregar_config, 
     atualizar_estatisticas_json, 
-    atualizar_historico_assembleias, # <--- ADICIONE ESTE IMPORT
+    atualizar_historico_assembleias, 
     carregar_dados_tabelas, salvar_dados_tabelas,
     download_json_supabase, upload_json_supabase,
-    FILE_RELACAO, FILE_DADOS, FILE_HISTORICO # <--- ADICIONE FILE_HISTORICO SE QUISER EXIBIR NO LOG
+    FILE_RELACAO, FILE_DADOS, FILE_HISTORICO
 )
 from pdf_processor import extrair_dados_pdf
 from login import LoginWindow 
@@ -28,6 +29,9 @@ COLOR_SUCCESS = "#059669"
 COLOR_TEXT_MAIN = "#111827"
 COLOR_TEXT_SUB = "#6B7280"
 COLOR_BORDER = "#E5E7EB"
+
+# --- CONSTANTE DO NOVO ARQUIVO ---
+FILE_MESSAGES = "mensagem_rolante_editavel.json"
 
 class ConsorcioApp:
     def __init__(self, root, current_user_role="user"): # Recebe o cargo
@@ -64,14 +68,16 @@ class ConsorcioApp:
         self.tab_especial = ttk.Frame(self.notebook, style="Main.TFrame")
         self.tab_editor = ttk.Frame(self.notebook, style="Main.TFrame")
         self.tab_pdf = ttk.Frame(self.notebook, style="Main.TFrame")
-        self.tab_relacao = ttk.Frame(self.notebook, style="Main.TFrame") 
+        self.tab_relacao = ttk.Frame(self.notebook, style="Main.TFrame")
+        self.tab_mensagens = ttk.Frame(self.notebook, style="Main.TFrame") # <--- NOVA ABA
 
         self.notebook.add(self.tab_2011, text=' Editar 2011 ')
         self.notebook.add(self.tab_5121, text=' Editar 5121 ')
         self.notebook.add(self.tab_especial, text=' Criar Tabela ')
         self.notebook.add(self.tab_editor, text=' Editar Tabelas ')
         self.notebook.add(self.tab_pdf, text=' Leitor PDF das Assembleias ')
-        self.notebook.add(self.tab_relacao, text=' Relação de Grupos ') 
+        self.notebook.add(self.tab_relacao, text=' Relação de Grupos ')
+        self.notebook.add(self.tab_mensagens, text=' Informativos ') # <--- ADICIONANDO AO NOTEBOOK
 
         self.last_config = carregar_config()
 
@@ -85,6 +91,10 @@ class ConsorcioApp:
         self.relacao_vars_cache = {} 
         self.relacao_selected_grupo = None
 
+        # Variáveis Mensagens
+        self.messages_data = {"messages": [], "lastUpdate": ""}
+        self.msg_selected_index = None
+
         self.vars = {
             '2011': self.init_vars('2011'),
             '5121': self.init_vars('5121'),
@@ -93,7 +103,8 @@ class ConsorcioApp:
             'editor': {
                 'id': tk.StringVar(), 'name': tk.StringVar(), 'category': tk.StringVar(),
                 'plan': tk.StringVar(), 'adm': tk.DoubleVar(), 'fundo': tk.DoubleVar(), 'seguro': tk.DoubleVar()
-            }
+            },
+            'msg': {'input': tk.StringVar()} # <--- VAR PARA O INPUT DE MENSAGEM
         }
 
         self.setup_tab_padrao(self.tab_2011, "2011", ["Normal", "Light", "SuperLight"], ["N", "L", "SL"])
@@ -101,7 +112,8 @@ class ConsorcioApp:
         self.setup_tab_especial()
         self.setup_tab_editor()
         self.setup_tab_pdf()
-        self.setup_tab_relacao() 
+        self.setup_tab_relacao()
+        self.setup_tab_mensagens() # <--- INICIANDO A ABA MENSAGENS
 
     def setup_styles(self):
         style = ttk.Style()
@@ -679,7 +691,6 @@ class ConsorcioApp:
         except Exception as e: self.log_pdf(f"❌ Erro ao salvar: {e}")
 
     # --- ABA RELAÇÃO (CLOUD & LOCAL) ---
-    # --- ABA RELAÇÃO (CLOUD & LOCAL) ---
     def setup_tab_relacao(self):
         content = ttk.Frame(self.tab_relacao, style="Main.TFrame", padding=10)
         content.pack(fill='both', expand=True)
@@ -894,9 +905,156 @@ class ConsorcioApp:
         if messagebox.askyesno("Desfazer", "Reverter para o estado do servidor?"):
             self.relacao_data = copy.deepcopy(self.relacao_backup); self.relacao_refresh_list(); self.relacao_limpar_painel()
 
+    # --- ABA MENSAGENS / TICKER (NOVA) ---
+    def setup_tab_mensagens(self):
+        content = ttk.Frame(self.tab_mensagens, style="Main.TFrame", padding=15)
+        content.pack(fill='both', expand=True)
+
+        # Barra Superior
+        top_bar = ttk.Frame(content, style="Main.TFrame")
+        top_bar.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(top_bar, text="⬇️ Carregar Mensagens", style="Sec.TButton", command=self.mensagens_carregar_nuvem).pack(side='left', padx=(0, 5))
+        self.lbl_msg_status = ttk.Label(top_bar, text="...", foreground=COLOR_TEXT_SUB)
+        self.lbl_msg_status.pack(side='left', padx=5)
+
+        ttk.Button(top_bar, text="💾 Salvar Local", style="Sec.TButton", command=self.mensagens_salvar_local).pack(side='right', padx=(5, 0))
+        ttk.Button(top_bar, text="☁️ ENVIAR", style="Action.TButton", command=self.mensagens_salvar_nuvem).pack(side='right', padx=(5, 0))
+        
+        # Painel Principal (Lista)
+        lf_list = ttk.LabelFrame(content, text="MENSAGENS ATIVAS", style="Card.TLabelframe", padding=10)
+        lf_list.pack(fill='both', expand=True, pady=(0, 10))
+
+        scroll_msg = ttk.Scrollbar(lf_list)
+        scroll_msg.pack(side='right', fill='y')
+
+        self.lst_mensagens = tk.Listbox(lf_list, font=("Segoe UI", 10), height=15, borderwidth=1, relief="solid", yscrollcommand=scroll_msg.set)
+        self.lst_mensagens.pack(side='left', fill='both', expand=True)
+        scroll_msg.config(command=self.lst_mensagens.yview)
+        self.lst_mensagens.bind('<<ListboxSelect>>', self.mensagens_selecionar)
+
+        # Painel Inferior (Edição)
+        bottom_panel = ttk.Frame(content, style="Main.TFrame")
+        bottom_panel.pack(fill='x')
+        
+        # Entrada de Texto
+        ttk.Label(bottom_panel, text="Texto da Mensagem:").pack(anchor='w', pady=(0, 2))
+        self.entry_msg = ttk.Entry(bottom_panel, textvariable=self.vars['msg']['input'])
+        self.entry_msg.pack(fill='x', pady=(0, 8))
+        
+        # Botões de Ação
+        btn_row = ttk.Frame(bottom_panel, style="Main.TFrame")
+        btn_row.pack(fill='x')
+
+        ttk.Button(btn_row, text="➕ Adicionar Nova", style="Sec.TButton", command=self.mensagens_adicionar).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(btn_row, text="✏️ Atualizar Selecionada", style="Warning.TButton", command=self.mensagens_editar).pack(side='left', fill='x', expand=True, padx=5)
+        ttk.Button(btn_row, text="🗑️ Excluir", style="Danger.TButton", command=self.mensagens_excluir).pack(side='left', fill='x', expand=True, padx=(5, 0))
+
+        # Botões de Ordem
+        order_row = ttk.Frame(bottom_panel, style="Main.TFrame")
+        order_row.pack(fill='x', pady=(8, 0))
+        ttk.Button(order_row, text="▲ Mover para Cima", style="Sec.TButton", command=self.mensagens_mover_cima).pack(side='left', fill='x', expand=True, padx=(0, 2))
+        ttk.Button(order_row, text="▼ Mover para Baixo", style="Sec.TButton", command=self.mensagens_mover_baixo).pack(side='left', fill='x', expand=True, padx=(2, 0))
+
+    # --- Lógica Mensagens ---
+    def mensagens_carregar_nuvem(self):
+        self.lbl_msg_status.config(text="Baixando...", foreground=COLOR_WARNING); self.root.update()
+        try:
+            data = download_json_supabase(FILE_MESSAGES)
+            if data and isinstance(data, dict):
+                self.messages_data = data
+            elif data and isinstance(data, list):
+                # Caso antigo ou formato errado, corrige
+                self.messages_data = {"messages": data, "lastUpdate": ""}
+            else:
+                self.messages_data = {"messages": [], "lastUpdate": ""}
+            
+            self.mensagens_refresh_list()
+            self.lbl_msg_status.config(text=FILE_MESSAGES, foreground=COLOR_SUCCESS)
+        except Exception as e:
+            self.lbl_msg_status.config(text="Erro", foreground=COLOR_DANGER)
+            messagebox.showerror("Erro Download", f"{e}")
+
+    def mensagens_salvar_nuvem(self):
+        self.lbl_msg_status.config(text="Enviando...", foreground=COLOR_WARNING); self.root.update()
+        try:
+            # Atualiza timestamp
+            self.messages_data["lastUpdate"] = datetime.now().isoformat()
+            
+            upload_json_supabase(FILE_MESSAGES, self.messages_data)
+            self.lbl_msg_status.config(text="Salvo!", foreground=COLOR_SUCCESS)
+            messagebox.showinfo("Sucesso", "Mensagens atualizadas no servidor!")
+        except Exception as e:
+            self.lbl_msg_status.config(text="Erro", foreground=COLOR_DANGER)
+            messagebox.showerror("Erro Upload", f"{e}")
+
+    def mensagens_salvar_local(self):
+        path = filedialog.asksaveasfilename(title="Salvar Mensagens Local", defaultextension=".json", filetypes=[("JSON", "*.json")], initialfile="mensagens_backup.json")
+        if not path: return
+        try:
+            self.messages_data["lastUpdate"] = datetime.now().isoformat()
+            with open(path, 'w', encoding='utf-8') as f: json.dump(self.messages_data, f, indent=4, ensure_ascii=False)
+            messagebox.showinfo("Salvo", f"Arquivo salvo localmente em:\n{path}")
+        except Exception as e: messagebox.showerror("Erro", str(e))
+
+    def mensagens_refresh_list(self):
+        self.lst_mensagens.delete(0, tk.END)
+        msgs = self.messages_data.get("messages", [])
+        for m in msgs:
+            self.lst_mensagens.insert(tk.END, m)
+        self.entry_msg.delete(0, tk.END)
+        self.msg_selected_index = None
+
+    def mensagens_selecionar(self, event):
+        sel = self.lst_mensagens.curselection()
+        if not sel: return
+        idx = sel[0]
+        self.msg_selected_index = idx
+        msg = self.lst_mensagens.get(idx)
+        self.vars['msg']['input'].set(msg)
+
+    def mensagens_adicionar(self):
+        txt = self.vars['msg']['input'].get().strip()
+        if not txt: return
+        self.messages_data["messages"].append(txt)
+        self.mensagens_refresh_list()
+        self.vars['msg']['input'].set("") # Limpa input
+
+    def mensagens_editar(self):
+        if self.msg_selected_index is None: return
+        txt = self.vars['msg']['input'].get().strip()
+        if not txt: return
+        self.messages_data["messages"][self.msg_selected_index] = txt
+        self.mensagens_refresh_list()
+
+    def mensagens_excluir(self):
+        if self.msg_selected_index is None: return
+        if not messagebox.askyesno("Excluir", "Remover esta mensagem?"): return
+        del self.messages_data["messages"][self.msg_selected_index]
+        self.mensagens_refresh_list()
+
+    def mensagens_mover_cima(self):
+        if self.msg_selected_index is None or self.msg_selected_index == 0: return
+        idx = self.msg_selected_index
+        msgs = self.messages_data["messages"]
+        msgs[idx], msgs[idx-1] = msgs[idx-1], msgs[idx]
+        self.mensagens_refresh_list()
+        self.lst_mensagens.selection_set(idx-1)
+        self.mensagens_selecionar(None)
+
+    def mensagens_mover_baixo(self):
+        if self.msg_selected_index is None: return
+        idx = self.msg_selected_index
+        msgs = self.messages_data["messages"]
+        if idx >= len(msgs) - 1: return
+        msgs[idx], msgs[idx+1] = msgs[idx+1], msgs[idx]
+        self.mensagens_refresh_list()
+        self.lst_mensagens.selection_set(idx+1)
+        self.mensagens_selecionar(None)
+
     # --- GERADOR (CLOUD & LOCAL) ---
     def salvar_estado_atual(self):
-        dados = {k: {sk: sv.get() for sk, sv in v.items()} for k, v in self.vars.items() if k not in ['pdf','editor']}
+        dados = {k: {sk: sv.get() for sk, sv in v.items()} for k, v in self.vars.items() if k not in ['pdf','editor', 'msg']}
         salvar_config(dados)
     
     def gerar_padrao(self, grupo):
@@ -960,7 +1118,7 @@ def center_root(r):
 
 def iniciar_aplicacao_principal(role): # Recebe o cargo aqui
     app = ConsorcioApp(root, current_user_role=role) # Passa o cargo
-    root.geometry("690x670")
+    root.geometry("780x670")
     center_root(root)
 
 if __name__ == "__main__":
