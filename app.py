@@ -4,7 +4,7 @@ import threading
 import os
 import copy
 import json
-from datetime import datetime  # <--- IMPORT ADICIONADO PARA DATA DE ATUALIZAÇÃO
+from datetime import datetime  
 
 from gerador import calcular_simulacao
 from json_utils import (
@@ -30,16 +30,18 @@ COLOR_TEXT_MAIN = "#111827"
 COLOR_TEXT_SUB = "#6B7280"
 COLOR_BORDER = "#E5E7EB"
 
-# --- CONSTANTE DO NOVO ARQUIVO ---
+# --- CONSTANTES DE ARQUIVOS ---
 FILE_MESSAGES = "mensagem_rolante_editavel.json"
+FILE_LOGS = "historico_global_logs.json" 
 
 class ConsorcioApp:
-    def __init__(self, root, current_user_role="user"): # Recebe o cargo
+    def __init__(self, root, current_user_role="user", current_username="Usuario"): 
         self.root = root
-        self.role = current_user_role # Salva o cargo
+        self.role = current_user_role 
+        self.username = current_username 
         
         role_label = " (ADMINISTRADOR)" if self.role == "admin" else " "
-        self.root.title(f" Gerenciador de Banco de Dados - Simulador Recon {role_label}")
+        self.root.title(f" Gerenciador de Banco de Dados - Simulador Recon {role_label} | Logado como: {self.username}")
         self.root.geometry("690x670")
         self.root.configure(bg=COLOR_BG)
         
@@ -53,6 +55,12 @@ class ConsorcioApp:
 
             menu_admin = tk.Menu(menubar, tearoff=0)
             menubar.add_cascade(label="Administração 🔒", menu=menu_admin)
+            
+            # --- NOVAS OPÇÕES ---
+            menu_admin.add_command(label="📜 Consultar Logs Globais", command=self.abrir_janela_logs) # <--- NOVO
+            menu_admin.add_separator()
+            # --------------------
+            
             menu_admin.add_command(label="➕ Cadastrar Usuário", command=self.abrir_janela_cadastro)
             menu_admin.add_command(label="🔄 Resetar Senha (Padrão)", command=self.abrir_janela_reset)
             menu_admin.add_command(label="❌ Bloquear Usuário", command=self.abrir_janela_exclusao)
@@ -69,7 +77,7 @@ class ConsorcioApp:
         self.tab_editor = ttk.Frame(self.notebook, style="Main.TFrame")
         self.tab_pdf = ttk.Frame(self.notebook, style="Main.TFrame")
         self.tab_relacao = ttk.Frame(self.notebook, style="Main.TFrame")
-        self.tab_mensagens = ttk.Frame(self.notebook, style="Main.TFrame") # <--- NOVA ABA
+        self.tab_mensagens = ttk.Frame(self.notebook, style="Main.TFrame") 
 
         self.notebook.add(self.tab_2011, text=' Editar 2011 ')
         self.notebook.add(self.tab_5121, text=' Editar 5121 ')
@@ -77,7 +85,7 @@ class ConsorcioApp:
         self.notebook.add(self.tab_editor, text=' Editar Tabelas ')
         self.notebook.add(self.tab_pdf, text=' Leitor PDF das Assembleias ')
         self.notebook.add(self.tab_relacao, text=' Relação de Grupos ')
-        self.notebook.add(self.tab_mensagens, text=' Informativos ') # <--- ADICIONANDO AO NOTEBOOK
+        self.notebook.add(self.tab_mensagens, text=' Informativos ') 
 
         self.last_config = carregar_config()
 
@@ -104,7 +112,7 @@ class ConsorcioApp:
                 'id': tk.StringVar(), 'name': tk.StringVar(), 'category': tk.StringVar(),
                 'plan': tk.StringVar(), 'adm': tk.DoubleVar(), 'fundo': tk.DoubleVar(), 'seguro': tk.DoubleVar()
             },
-            'msg': {'input': tk.StringVar()} # <--- VAR PARA O INPUT DE MENSAGEM
+            'msg': {'input': tk.StringVar()}
         }
 
         self.setup_tab_padrao(self.tab_2011, "2011", ["Normal", "Light", "SuperLight"], ["N", "L", "SL"])
@@ -113,7 +121,54 @@ class ConsorcioApp:
         self.setup_tab_editor()
         self.setup_tab_pdf()
         self.setup_tab_relacao()
-        self.setup_tab_mensagens() # <--- INICIANDO A ABA MENSAGENS
+        self.setup_tab_mensagens() 
+
+    # --- SISTEMA DE LOG GLOBAL (NUVEM + LOCAL) ---
+    def _registrar_log(self, acao, detalhes):
+        """Salva log e sincroniza com a nuvem em background"""
+        registro = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "usuario": self.username,
+            "cargo": self.role,
+            "acao": acao,
+            "detalhes": detalhes
+        }
+
+        def _sync_log_background():
+            lista_logs = []
+            
+            # 1. Tenta baixar da nuvem primeiro
+            try:
+                dados_cloud = download_json_supabase(FILE_LOGS)
+                if isinstance(dados_cloud, list):
+                    lista_logs = dados_cloud
+            except Exception as e:
+                print(f"[LOG] Falha ao baixar logs da nuvem (usando local): {e}")
+                if os.path.exists(FILE_LOGS):
+                    try:
+                        with open(FILE_LOGS, 'r', encoding='utf-8') as f:
+                            lista_logs = json.load(f)
+                    except:
+                        lista_logs = []
+
+            # 2. Adiciona o novo registro
+            lista_logs.append(registro)
+            
+            # 3. Salva Localmente
+            try:
+                with open(FILE_LOGS, 'w', encoding='utf-8') as f:
+                    json.dump(lista_logs, f, indent=4, ensure_ascii=False)
+            except Exception as e:
+                print(f"[LOG] Erro ao salvar log local: {e}")
+
+            # 4. Envia para a Nuvem
+            try:
+                upload_json_supabase(FILE_LOGS, lista_logs)
+                print(f"[LOG] Sincronizado com a nuvem: {acao}")
+            except Exception as e:
+                print(f"[LOG] Erro ao subir log para nuvem: {e}")
+
+        threading.Thread(target=_sync_log_background, daemon=True).start()
 
     def setup_styles(self):
         style = ttk.Style()
@@ -172,11 +227,105 @@ class ConsorcioApp:
         entry.pack(side='left', fill='x', expand=True)
         if tipo == "porcentagem": ttk.Label(row_cont, text=" %", style="Sub.TLabel").pack(side='left')
 
+    # --- ADMINISTRAÇÃO: CONSULTA DE LOGS (NOVO) ---
+    def abrir_janela_logs(self):
+        top = tk.Toplevel(self.root)
+        top.title("Logs Globais do Sistema (Nuvem)")
+        top.geometry("900x500")
+        top.configure(bg=COLOR_BG)
+        
+        # Centralizar
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 450
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 250
+        top.geometry(f"+{x}+{y}")
+
+        # Topo
+        frame_top = ttk.Frame(top, style="Main.TFrame", padding=10)
+        frame_top.pack(fill='x')
+        ttk.Label(frame_top, text="Histórico de Atividades", font=("Segoe UI", 12, "bold"), background=COLOR_BG).pack(side='left')
+        
+        lbl_status = ttk.Label(frame_top, text="Aguardando...", foreground=COLOR_TEXT_SUB, background=COLOR_BG)
+        lbl_status.pack(side='right', padx=10)
+
+        # Tabela
+        cols = ("Data/Hora", "Usuário", "Cargo", "Ação", "Detalhes")
+        tree = ttk.Treeview(top, columns=cols, show='headings', selectmode='browse')
+        
+        tree.heading("Data/Hora", text="Data/Hora")
+        tree.heading("Usuário", text="Usuário")
+        tree.heading("Cargo", text="Cargo")
+        tree.heading("Ação", text="Ação")
+        tree.heading("Detalhes", text="Detalhes")
+        
+        tree.column("Data/Hora", width=130, anchor="center")
+        tree.column("Usuário", width=100, anchor="center")
+        tree.column("Cargo", width=60, anchor="center")
+        tree.column("Ação", width=150)
+        tree.column("Detalhes", width=400)
+
+        # Scrollbar
+        scroll_y = ttk.Scrollbar(top, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll_y.set)
+        
+        tree.pack(side='left', fill='both', expand=True, padx=(10,0), pady=10)
+        scroll_y.pack(side='right', fill='y', pady=10, padx=(0,10))
+
+        # Botão Atualizar
+        btn_refresh = ttk.Button(frame_top, text="🔄 Atualizar Agora", style="Action.TButton")
+        btn_refresh.pack(side='right')
+
+        def carregar_dados():
+            lbl_status.config(text="Baixando da nuvem...", foreground=COLOR_WARNING)
+            btn_refresh.config(state='disabled')
+            
+            # Limpa tabela
+            for i in tree.get_children(): tree.delete(i)
+
+            def _thread_fetch():
+                try:
+                    # Baixa do Supabase
+                    dados = download_json_supabase(FILE_LOGS)
+                    if not dados or not isinstance(dados, list):
+                        dados = []
+                    
+                    # Ordena do mais recente para o mais antigo
+                    try:
+                        dados.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+                    except: pass
+                    
+                    def _update_ui():
+                        for item in dados:
+                            tree.insert("", "end", values=(
+                                item.get("timestamp", ""),
+                                item.get("usuario", ""),
+                                item.get("cargo", ""),
+                                item.get("acao", ""),
+                                item.get("detalhes", "")
+                            ))
+                        lbl_status.config(text=f"{len(dados)} registros carregados.", foreground=COLOR_SUCCESS)
+                        btn_refresh.config(state='normal')
+                    
+                    top.after(0, _update_ui)
+                    
+                except Exception as e:
+                    def _error_ui():
+                        lbl_status.config(text="Erro ao baixar.", foreground=COLOR_DANGER)
+                        messagebox.showerror("Erro", f"Falha ao buscar logs: {e}", parent=top)
+                        btn_refresh.config(state='normal')
+                    top.after(0, _error_ui)
+
+            threading.Thread(target=_thread_fetch, daemon=True).start()
+
+        btn_refresh.config(command=carregar_dados)
+        
+        # Carrega automaticamente ao abrir
+        carregar_dados()
+
     # --- ADMINISTRAÇÃO: CADASTRO COM ROLE ---
     def abrir_janela_cadastro(self):
         top = tk.Toplevel(self.root)
         top.title("Novo Usuário")
-        top.geometry("300x320") # Aumentei um pouco
+        top.geometry("300x320")
         top.configure(bg=COLOR_BG)
         top.resizable(False, False)
         x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 150
@@ -216,9 +365,10 @@ class ConsorcioApp:
             if not u or not p: return messagebox.showwarning("Atenção", "Preencha tudo.", parent=top)
             if p != c: return messagebox.showerror("Erro", "Senhas não conferem.", parent=top)
 
-            sucesso, msg = self.auth.create_user(u, p, role=role) # Passa o role
+            sucesso, msg = self.auth.create_user(u, p, role=role) 
             
             if sucesso:
+                self._registrar_log("ADMIN_CRIAR_USUARIO", f"Usuário criado: {u} | Permissão: {role}")
                 messagebox.showinfo("Sucesso", f"Usuário '{u}' ({role}) criado!", parent=top)
                 top.destroy()
             else:
@@ -265,6 +415,7 @@ class ConsorcioApp:
                 
                 sucesso, msg = self.auth.admin_reset_password(usuario)
                 if sucesso:
+                    self._registrar_log("ADMIN_RESET_SENHA", f"Resetou senha de: {usuario}")
                     messagebox.showinfo("Sucesso", msg, parent=top)
                     top.destroy()
                 else:
@@ -304,6 +455,7 @@ class ConsorcioApp:
             if messagebox.askyesno("Confirmar", f"Bloquear '{usuario}'?", parent=top):
                 sucesso, msg = self.auth.delete_user(usuario)
                 if sucesso:
+                    self._registrar_log("ADMIN_BLOQUEAR", f"Bloqueou usuário: {usuario}")
                     messagebox.showinfo("Sucesso", msg, parent=top)
                     top.destroy()
                 else: messagebox.showerror("Erro", msg, parent=top)
@@ -391,7 +543,7 @@ class ConsorcioApp:
         # 1. Título
         ttk.Label(frame_list, text="TABELAS (dados_consorcio)", font=("Segoe UI", 8, "bold"), foreground=COLOR_TEXT_SUB).pack(side='top', anchor='w', pady=(0, 5))
         
-        # 2. Container para Lista e Scrollbar (Para isolar o layout)
+        # 2. Container para Lista e Scrollbar
         list_container = ttk.Frame(frame_list)
         list_container.pack(side='top', fill='both', expand=True)
 
@@ -403,9 +555,9 @@ class ConsorcioApp:
         scroll_lst.config(command=self.lst_tabelas.yview)
         self.lst_tabelas.bind('<<ListboxSelect>>', self.editor_selecionar_tabela)
 
-        # 3. Botões de Mover (Abaixo do container da lista)
+        # 3. Botões de Mover
         btn_move_frame = ttk.Frame(frame_list, style="Main.TFrame")
-        btn_move_frame.pack(side='top', fill='x', pady=5) # side='top' garante que fique logo abaixo da lista
+        btn_move_frame.pack(side='top', fill='x', pady=5) 
         
         ttk.Button(btn_move_frame, text="▲ Cima", style="Sec.TButton", command=self.editor_mover_cima).pack(side='left', fill='x', expand=True, padx=(0, 2))
         ttk.Button(btn_move_frame, text="▼ Baixo", style="Sec.TButton", command=self.editor_mover_baixo).pack(side='left', fill='x', expand=True, padx=(2, 0))
@@ -462,6 +614,7 @@ class ConsorcioApp:
         try:
             upload_json_supabase(FILE_DADOS, self.editor_data) 
             self.editor_backup = copy.deepcopy(self.editor_data); self.lbl_editor_status.config(text="Salvo!", foreground=COLOR_SUCCESS)
+            self._registrar_log("EDITOR_SALVAR_NUVEM", "Atualizou o arquivo mestre de tabelas no Supabase")
             messagebox.showinfo("Sucesso", "Dados atualizados no servidor!")
         except Exception as e:
             self.lbl_editor_status.config(text="Erro", foreground=COLOR_DANGER); messagebox.showerror("Erro Upload", f"{e}")
@@ -471,6 +624,7 @@ class ConsorcioApp:
         if not path: return
         try:
             with open(path, 'w', encoding='utf-8') as f: json.dump(self.editor_data, f, indent=4, ensure_ascii=False)
+            self._registrar_log("EDITOR_SALVAR_LOCAL", f"Salvo em: {path}")
             messagebox.showinfo("Salvo", f"Arquivo salvo localmente em:\n{path}")
         except Exception as e: messagebox.showerror("Erro", str(e))
 
@@ -480,18 +634,16 @@ class ConsorcioApp:
         if "metadata" in self.editor_data:
             for item in self.editor_data["metadata"]: self.lst_tabelas.insert(tk.END, item.get("id", "?"))
 
-    # --- NOVAS FUNÇÕES: MOVER ITENS NA LISTA ---
+    # --- FUNÇÕES: MOVER ITENS NA LISTA ---
     def editor_mover_cima(self):
         sel = self.lst_tabelas.curselection()
         if not sel: return
         idx = sel[0]
         if idx == 0: return # Já está no topo
 
-        # Troca na lista de metadados
         meta = self.editor_data["metadata"]
         meta[idx], meta[idx-1] = meta[idx-1], meta[idx]
         
-        # Atualiza UI e mantém seleção
         self.editor_refresh_lista()
         self.lst_tabelas.selection_set(idx-1)
         self.lst_tabelas.see(idx-1)
@@ -503,10 +655,8 @@ class ConsorcioApp:
         meta = self.editor_data["metadata"]
         if idx >= len(meta) - 1: return # Já está em baixo
 
-        # Troca na lista de metadados
         meta[idx], meta[idx+1] = meta[idx+1], meta[idx]
 
-        # Atualiza UI e mantém seleção
         self.editor_refresh_lista()
         self.lst_tabelas.selection_set(idx+1)
         self.lst_tabelas.see(idx+1)
@@ -529,10 +679,7 @@ class ConsorcioApp:
             credito = r.get('credito', 0); cred_fmt = f"R$ {credito:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             parent_id = self.tree_data.insert("", "end", iid=f"c_{i}", text=cred_fmt, values=("Expandir",), open=False)
             prazos = r.get('prazos', []); 
-            
-            # --- CORREÇÃO AQUI: ORDENAR DECRESCENTE (reverse=True) ---
             prazos.sort(key=lambda x: x.get('prazo', 0), reverse=True) 
-            # ---------------------------------------------------------
             
             for j, p in enumerate(prazos):
                 prazo_meses = p.get('prazo', 0); val_unico = p.get('parcela', None); val_csv = p.get('parcela_CSV', 0); val_ssv = p.get('parcela_SSV', None)
@@ -550,24 +697,21 @@ class ConsorcioApp:
         new_id = self.vars['editor']['id'].get().strip()
         new_name = self.vars['editor']['name'].get().strip()
         
-        # Validação básica
         if not new_id or not new_name:
             messagebox.showwarning("Aviso", "ID e Nome da tabela são obrigatórios.")
             return
 
-        # Verificar duplicidade se o ID mudou
         if new_id != old_id:
             existe = any(m["id"] == new_id for m in self.editor_data["metadata"] if m["id"] != old_id)
             if existe:
                 messagebox.showerror("Erro", f"O ID '{new_id}' já está sendo usado em outra tabela.")
                 return
 
-        # 1. Atualiza METADADOS
         found = False
         for m in self.editor_data["metadata"]:
             if m["id"] == old_id:
-                m["id"] = new_id # Atualiza o ID
-                m["name"] = new_name # Atualiza o Nome
+                m["id"] = new_id 
+                m["name"] = new_name 
                 m["category"] = self.vars['editor']['category'].get()
                 m["plan"] = self.vars['editor']['plan'].get()
                 m["taxaAdmin"] = self.vars['editor']['adm'].get()
@@ -577,16 +721,13 @@ class ConsorcioApp:
         
         if not found: return
 
-        # 2. Atualiza a chave no dicionário DATA se o ID mudou
         if new_id != old_id:
             if old_id in self.editor_data["data"]:
                 self.editor_data["data"][new_id] = self.editor_data["data"].pop(old_id)
             
-            # Atualiza referência e lista
             self.selected_table_id = new_id
             self.editor_refresh_lista()
             
-            # Tenta reselecionar o novo ID na lista para manter o foco
             items = self.lst_tabelas.get(0, tk.END)
             try:
                 idx = items.index(new_id)
@@ -595,6 +736,7 @@ class ConsorcioApp:
                 self.lst_tabelas.see(idx)
             except: pass
 
+        self._registrar_log("EDITOR_METADATA", f"Atualizou metadados da tabela {old_id} -> {new_id}")
         messagebox.showinfo("OK", "Dados Salvos (ID/Nome/Taxas atualizados).\nClique em ENVIAR para atualizar ONLINE.")
 
     def editor_converter_seguro(self):
@@ -608,7 +750,10 @@ class ConsorcioApp:
                     if 'parcela_SSV' in p: del p['parcela_SSV']
                     if 'parcela_CSV' in p: val = p.pop('parcela_CSV'); p['parcela'] = val
                     alteracoes += 1
-        if alteracoes > 0: self.editor_selecionar_tabela(None); messagebox.showinfo("OK", f"{alteracoes} convertidos.")
+        if alteracoes > 0: 
+            self.editor_selecionar_tabela(None)
+            self._registrar_log("EDITOR_CONVERT", f"Converteu {alteracoes} itens para Seguro Obrigatório na tabela {t_id}")
+            messagebox.showinfo("OK", f"{alteracoes} convertidos.")
         else: messagebox.showinfo("Aviso", "Nada alterado.")
 
     def editor_excluir_tabela(self):
@@ -617,6 +762,7 @@ class ConsorcioApp:
         if not messagebox.askyesno("Confirmar", f"Excluir tabela '{t_id}'?"): return
         self.editor_data["metadata"] = [m for m in self.editor_data["metadata"] if m["id"] != t_id]
         if t_id in self.editor_data["data"]: del self.editor_data["data"][t_id]
+        self._registrar_log("EDITOR_DELETE_TABLE", f"Excluiu tabela {t_id}")
         self.editor_refresh_lista(); self.tree_data.delete(*self.tree_data.get_children()); self.selected_table_id = None
 
     def editor_excluir_item(self):
@@ -629,15 +775,19 @@ class ConsorcioApp:
             idx_cred = int(item_id.split("_")[1])
             if not messagebox.askyesno("Excluir", "Deseja excluir TODO o crédito?"): return
             del rows[idx_cred]; self.editor_data["data"][t_id] = rows; self.editor_selecionar_tabela(None)
+            self._registrar_log("EDITOR_DELETE_CREDIT", f"Excluiu crédito index {idx_cred} da tabela {t_id}")
         elif item_id.startswith("p_"):
             parts = item_id.split("_"); idx_cred = int(parts[1]); idx_prazo = int(parts[2])
             cred_row = rows[idx_cred]; prazos = cred_row.get('prazos', [])
             if len(prazos) <= 1:
-                if messagebox.askyesno("Aviso Crítico", "Único prazo. Excluir crédito inteiro?"): del rows[idx_cred]
+                if messagebox.askyesno("Aviso Crítico", "Único prazo. Excluir crédito inteiro?"): 
+                    del rows[idx_cred]
+                    self._registrar_log("EDITOR_DELETE_CREDIT", f"Excluiu crédito index {idx_cred} (último prazo) da tabela {t_id}")
                 else: return
             else:
                 if not messagebox.askyesno("Confirmar", "Excluir apenas esta opção?"): return
                 del rows[idx_cred]['prazos'][idx_prazo]
+                self._registrar_log("EDITOR_DELETE_PRAZO", f"Excluiu prazo index {idx_prazo} do crédito {idx_cred} tabela {t_id}")
             self.editor_data["data"][t_id] = rows; self.editor_selecionar_tabela(None)
 
     def editor_reverter(self):
@@ -661,15 +811,14 @@ class ConsorcioApp:
         lbl_path = ttk.Label(row_file, textvariable=self.vars['pdf']['path'], foreground=COLOR_TEXT_SUB, width=40)
         lbl_path.pack(side='left', fill='x', expand=True)
         
-        # --- BOTÕES LADO A LADO (ALTERAÇÃO AQUI) ---
-        # Criamos um frame container para os botões
+        # --- BOTÕES LADO A LADO ---
         btn_frame = ttk.Frame(content, style="Main.TFrame")
-        btn_frame.pack(fill='x', pady=10) # Padding vertical aplicado ao grupo
+        btn_frame.pack(fill='x', pady=10) 
 
-        # Botão 1: Salvar Local (Lado esquerdo, expandindo 50%)
+        # Botão 1: Salvar Local
         ttk.Button(btn_frame, text="💾 EXTRAIR E SALVAR LOCALMENTE", style="Sec.TButton", command=self.executar_processamento_pdf_local).pack(side='left', fill='x', expand=True, padx=(0, 5), ipady=5)
         
-        # Botão 2: Atualizar Nuvem (Lado direito, expandindo 50%)
+        # Botão 2: Atualizar Nuvem
         ttk.Button(btn_frame, text="☁️ EXTRAIR E ATUALIZAR SERVIDOR", style="Action.TButton", command=self.executar_processamento_pdf).pack(side='left', fill='x', expand=True, padx=(5, 0), ipady=5)
         
         # --- Log ---
@@ -715,6 +864,8 @@ class ConsorcioApp:
             self.log_pdf("Atualizando histórico de assembleias...")
             add_hist, up_hist = atualizar_historico_assembleias(dados)
             self.log_pdf(f"HISTÓRICO: +{add_hist} Registros de Tempo | ⟳{up_hist} Corrigidos")
+            
+            self._registrar_log("PDF_PROCESS_CLOUD", f"Processou PDF {os.path.basename(pdf_path)} na nuvem")
 
             messagebox.showinfo("Concluído", 
                                 f"Sincronização Finalizada!\n\n"
@@ -723,7 +874,6 @@ class ConsorcioApp:
 
         except Exception as e:
             self.log_pdf(f"❌ Erro de Sincronização: {str(e)}")
-            # Imprime o erro completo no console para debug se necessário
             print(e)
 
     def _thread_pdf_local(self, pdf_path):
@@ -734,6 +884,7 @@ class ConsorcioApp:
         if not path_save: self.log_pdf("Operação cancelada."); return
         try:
             with open(path_save, 'w', encoding='utf-8') as f: json.dump(dados, f, indent=4, ensure_ascii=False)
+            self._registrar_log("PDF_PROCESS_LOCAL", f"Salvou extração em {path_save}")
             self.log_pdf(f"💾 Salvo em: {path_save}"); messagebox.showinfo("Sucesso", "Dados extraídos e salvos localmente!")
         except Exception as e: self.log_pdf(f"❌ Erro ao salvar: {e}")
 
@@ -779,13 +930,11 @@ class ConsorcioApp:
         toolbar_fields = ttk.LabelFrame(right_panel, text="Adicione ou Remova Campos de Informações", style="Card.TLabelframe", padding=5)
         toolbar_fields.pack(fill='x', pady=(0, 5))
         
-        # --- BOTÕES DE CAMPOS (ALTERADO AQUI) ---
         ttk.Button(toolbar_fields, text="➕ Add Global", style="Sec.TButton", command=self.relacao_add_global_field).pack(side='left', padx=(0, 5))
-        ttk.Button(toolbar_fields, text="➕ Add Local", style="Sec.TButton", command=self.relacao_add_local_field).pack(side='left', padx=(0, 5)) # <--- NOVO
+        ttk.Button(toolbar_fields, text="➕ Add Local", style="Sec.TButton", command=self.relacao_add_local_field).pack(side='left', padx=(0, 5)) 
         
         ttk.Button(toolbar_fields, text="➖ Del Global", style="Warning.TButton", command=self.relacao_del_global_field).pack(side='right', padx=(5, 0))
         ttk.Button(toolbar_fields, text="➖ Del Local", style="Sec.TButton", command=self.relacao_del_local_field).pack(side='right')
-        # ----------------------------------------
         
         self.canvas_relacao = tk.Canvas(right_panel, bg=COLOR_BG, highlightthickness=0)
         scroll_y = ttk.Scrollbar(right_panel, orient="vertical", command=self.canvas_relacao.yview)
@@ -818,6 +967,7 @@ class ConsorcioApp:
             try: final_list.sort(key=lambda x: int(x.get("Grupo", 0)))
             except: pass
             upload_json_supabase(FILE_RELACAO, final_list)
+            self._registrar_log("RELACAO_SALVAR_NUVEM", "Atualizou a relação de grupos no servidor")
             self.relacao_backup = copy.deepcopy(self.relacao_data); self.lbl_relacao_status.config(text="Salvo!", foreground=COLOR_SUCCESS)
             messagebox.showinfo("Sucesso", "Relação salva no servidor!")
         except Exception as e: self.lbl_relacao_status.config(text="Erro", foreground=COLOR_DANGER); messagebox.showerror("Erro Upload", f"{e}")
@@ -831,6 +981,7 @@ class ConsorcioApp:
             try: final_list.sort(key=lambda x: int(x.get("Grupo", 0)))
             except: pass
             with open(path, 'w', encoding='utf-8') as f: json.dump(final_list, f, indent=4, ensure_ascii=False)
+            self._registrar_log("RELACAO_SALVAR_LOCAL", f"Salvo em: {path}")
             messagebox.showinfo("Salvo", f"Arquivo salvo localmente em:\n{path}")
         except Exception as e: messagebox.showerror("Erro", str(e))
 
@@ -885,6 +1036,7 @@ class ConsorcioApp:
                 except: new_obj[k] = new_id
             else: new_obj[k] = ""
         self.relacao_data[new_id] = new_obj; self.relacao_refresh_list()
+        self._registrar_log("RELACAO_ADD_GRUPO", f"Adicionou grupo {new_id}")
 
     def relacao_excluir_grupo(self):
         sel = self.lst_grupos.curselection()
@@ -893,6 +1045,7 @@ class ConsorcioApp:
         if messagebox.askyesno("Excluir", f"Apagar {grp_id}?"):
             if grp_id == self.relacao_selected_grupo: self.relacao_limpar_painel()
             del self.relacao_data[grp_id]; self.relacao_refresh_list()
+            self._registrar_log("RELACAO_DEL_GRUPO", f"Removeu grupo {grp_id}")
 
     def relacao_add_global_field(self):
         if not self.relacao_data: return
@@ -901,6 +1054,7 @@ class ConsorcioApp:
         for grp in self.relacao_data:
             if field_name not in self.relacao_data[grp]: self.relacao_data[grp][field_name] = ""
         if self.relacao_selected_grupo: self.lst_grupos.event_generate("<<ListboxSelect>>")
+        self._registrar_log("RELACAO_ADD_FIELD_GLOBAL", f"Adicionou campo global: {field_name}")
 
     def relacao_add_local_field(self):
         """Adiciona um campo APENAS no grupo selecionado atualmente"""
@@ -921,6 +1075,7 @@ class ConsorcioApp:
 
         # Adiciona o campo vazio apenas neste grupo
         self.relacao_data[self.relacao_selected_grupo][field_name] = ""
+        self._registrar_log("RELACAO_ADD_FIELD_LOCAL", f"Adicionou campo {field_name} ao grupo {self.relacao_selected_grupo}")
         
         # Atualiza a visualização
         self._renderizar_campos_grupo(self.relacao_selected_grupo)
@@ -936,6 +1091,7 @@ class ConsorcioApp:
             if field_name in self.relacao_data[grp]: del self.relacao_data[grp][field_name]; count += 1
         if count > 0:
             if self.relacao_selected_grupo: self._renderizar_campos_grupo(self.relacao_selected_grupo)
+            self._registrar_log("RELACAO_DEL_FIELD_GLOBAL", f"Removeu campo {field_name} de {count} grupos")
             messagebox.showinfo("Info", f"Removido de {count}.")
 
     def relacao_del_local_field(self):
@@ -945,7 +1101,10 @@ class ConsorcioApp:
         if not field_name: return
         if field_name == "Grupo": return
         dados = self.relacao_data[self.relacao_selected_grupo]
-        if field_name in dados: del self.relacao_data[self.relacao_selected_grupo][field_name]; self._renderizar_campos_grupo(self.relacao_selected_grupo)
+        if field_name in dados: 
+            del self.relacao_data[self.relacao_selected_grupo][field_name]
+            self._renderizar_campos_grupo(self.relacao_selected_grupo)
+            self._registrar_log("RELACAO_DEL_FIELD_LOCAL", f"Removeu campo {field_name} do grupo {self.relacao_selected_grupo}")
 
     def relacao_reverter(self):
         if not self.relacao_backup: return
@@ -1011,7 +1170,6 @@ class ConsorcioApp:
             if data and isinstance(data, dict):
                 self.messages_data = data
             elif data and isinstance(data, list):
-                # Caso antigo ou formato errado, corrige
                 self.messages_data = {"messages": data, "lastUpdate": ""}
             else:
                 self.messages_data = {"messages": [], "lastUpdate": ""}
@@ -1025,10 +1183,9 @@ class ConsorcioApp:
     def mensagens_salvar_nuvem(self):
         self.lbl_msg_status.config(text="Enviando...", foreground=COLOR_WARNING); self.root.update()
         try:
-            # Atualiza timestamp
             self.messages_data["lastUpdate"] = datetime.now().isoformat()
-            
             upload_json_supabase(FILE_MESSAGES, self.messages_data)
+            self._registrar_log("MESSAGES_SALVAR_NUVEM", "Atualizou mensagens rolantes no servidor")
             self.lbl_msg_status.config(text="Salvo!", foreground=COLOR_SUCCESS)
             messagebox.showinfo("Sucesso", "Mensagens atualizadas no servidor!")
         except Exception as e:
@@ -1041,6 +1198,7 @@ class ConsorcioApp:
         try:
             self.messages_data["lastUpdate"] = datetime.now().isoformat()
             with open(path, 'w', encoding='utf-8') as f: json.dump(self.messages_data, f, indent=4, ensure_ascii=False)
+            self._registrar_log("MESSAGES_SALVAR_LOCAL", f"Salvo em: {path}")
             messagebox.showinfo("Salvo", f"Arquivo salvo localmente em:\n{path}")
         except Exception as e: messagebox.showerror("Erro", str(e))
 
@@ -1109,7 +1267,9 @@ class ConsorcioApp:
         chave = f"t_{('imovel' if grupo=='2011' else 'auto')}{grupo}_{('normal' if pl=='N' else pl)}"
         try:
             res = calcular_simulacao(grupo, pl, d['prazo'].get(), d['credito_ini'].get(), d['credito_fim'].get(), d['passo'].get())
-            salvar_dados_tabelas(chave, res); messagebox.showinfo("Sucesso", f"Tabela {chave} atualizada no servidor!")
+            salvar_dados_tabelas(chave, res); 
+            self._registrar_log("GERADOR_CLOUD", f"Gerou tabela {chave} para nuvem")
+            messagebox.showinfo("Sucesso", f"Tabela {chave} atualizada no servidor!")
         except Exception as e: messagebox.showerror("Erro Crítico", f"Falha ao gerar/upload:\n{str(e)}")
 
     def gerar_padrao_local(self, grupo):
@@ -1120,6 +1280,7 @@ class ConsorcioApp:
         try:
             res = calcular_simulacao(grupo, pl, d['prazo'].get(), d['credito_ini'].get(), d['credito_fim'].get(), d['passo'].get())
             with open(path, 'w', encoding='utf-8') as f: json.dump(res, f, indent=4, ensure_ascii=False)
+            self._registrar_log("GERADOR_LOCAL", f"Gerou tabela {chave} em {path}")
             messagebox.showinfo("Salvo", f"Tabela {chave} salva localmente!")
         except Exception as e: messagebox.showerror("Erro Crítico", f"{str(e)}")
 
@@ -1137,7 +1298,9 @@ class ConsorcioApp:
                     for p in item['prazos']:
                         if 'parcela_SSV' in p: del p['parcela_SSV']
                         if 'parcela_CSV' in p: p['parcela'] = p.pop('parcela_CSV')
-            salvar_dados_tabelas(chave, res, metadata_item=meta); messagebox.showinfo("Sucesso", f"Tabela Especial {chave} atualizada no servidor!")
+            salvar_dados_tabelas(chave, res, metadata_item=meta)
+            self._registrar_log("GERADOR_ESPECIAL", f"Criou tabela {chave} na nuvem")
+            messagebox.showinfo("Sucesso", f"Tabela Especial {chave} atualizada no servidor!")
         except Exception as e: messagebox.showerror("Erro Crítico", f"Falha ao gerar/upload:\n{str(e)}")
 
     def gerar_especial_local(self):
@@ -1153,6 +1316,7 @@ class ConsorcioApp:
                         if 'parcela_SSV' in p: del p['parcela_SSV']
                         if 'parcela_CSV' in p: p['parcela'] = p.pop('parcela_CSV')
             with open(path, 'w', encoding='utf-8') as f: json.dump(res, f, indent=4, ensure_ascii=False)
+            self._registrar_log("GERADOR_ESPECIAL_LOCAL", f"Salvou especial em {path}")
             messagebox.showinfo("Salvo", f"Tabela especial salva localmente!")
         except Exception as e: messagebox.showerror("Erro Crítico", f"{str(e)}")
 
@@ -1163,8 +1327,8 @@ def center_root(r):
     x = w/2 - size[0]/2; y = h/2 - size[1]/2
     r.geometry("%dx%d+%d+%d" % (size + (x, y)))
 
-def iniciar_aplicacao_principal(role): # Recebe o cargo aqui
-    app = ConsorcioApp(root, current_user_role=role) # Passa o cargo
+def iniciar_aplicacao_principal(user, role): 
+    app = ConsorcioApp(root, current_user_role=role, current_username=user)
     root.geometry("780x670")
     center_root(root)
 

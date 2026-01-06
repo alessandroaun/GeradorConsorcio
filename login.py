@@ -62,23 +62,33 @@ class LoginWindow:
             messagebox.showwarning("Atenção", "Preencha todos os campos.")
             return
 
-        # Recebe 3 valores agora
-        success, role, reset_required = self.auth.authenticate(user, password)
+        # Tenta autenticar
+        # OBS: Se seu auth.py usar 'login' em vez de 'authenticate', altere o nome abaixo
+        if hasattr(self.auth, 'authenticate'):
+            success, role, reset_required = self.auth.authenticate(user, password)
+        else:
+            # Fallback caso esteja usando a versão do auth.py que passei anteriormente
+            success, role, msg = self.auth.login(user, password)
+            reset_required = False # Assumindo false se usar o método login antigo
 
         if success:
             if reset_required:
                 # Intercepta e força a troca de senha
                 self.show_force_change_password(user, role)
             else:
-                # Login normal
-                self.start_app(role)
+                # Login normal - CORREÇÃO AQUI: Passando 'user' e 'role'
+                self.start_app(user, role)
         else:
-            messagebox.showerror("Erro", "Usuário ou senha incorretos.")
+            # Se a autenticação falhar, tenta pegar a mensagem de erro se disponível
+            msg_erro = "Usuário ou senha incorretos."
+            messagebox.showerror("Erro", msg_erro)
 
-    def start_app(self, role):
+    def start_app(self, user, role):
+        # Limpa a tela
         for widget in self.root.winfo_children():
             widget.destroy()
-        self.on_success(role)
+        # CORREÇÃO AQUI: Envia 'user' e 'role' para o app.py
+        self.on_success(user, role)
 
     def show_force_change_password(self, user, role):
         """Tela intermediária obrigatória para troca de senha"""
@@ -116,7 +126,8 @@ class LoginWindow:
             ok, msg = self.auth.user_change_password(user, p1)
             if ok:
                 messagebox.showinfo("Sucesso", "Senha atualizada! Entrando no sistema...")
-                self.start_app(role)
+                # CORREÇÃO AQUI: Passando 'user' e 'role'
+                self.start_app(user, role)
             else:
                 messagebox.showerror("Erro", msg)
 

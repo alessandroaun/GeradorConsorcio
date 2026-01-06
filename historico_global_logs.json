@@ -1,0 +1,51 @@
+[
+    {
+        "timestamp": "2026-01-05 18:00:53",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_TABLE",
+        "detalhes": "Excluiu tabela t_imovel2011_201_SL_NOVO_PROMO"
+    },
+    {
+        "timestamp": "2026-01-05 18:01:01",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_TABLE",
+        "detalhes": "Excluiu tabela t_imovel2011_201_L_NOVO_PROMO"
+    },
+    {
+        "timestamp": "2026-01-05 18:01:04",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_TABLE",
+        "detalhes": "Excluiu tabela t_imovel2011_normal_NOVO_PROMO"
+    },
+    {
+        "timestamp": "2026-01-05 18:01:08",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_TABLE",
+        "detalhes": "Excluiu tabela t_auto5121_L_NOVO_PROMO"
+    },
+    {
+        "timestamp": "2026-01-05 18:01:11",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_TABLE",
+        "detalhes": "Excluiu tabela t_auto5121_normal_NOVO_PROMO"
+    },
+    {
+        "timestamp": "2026-01-05 18:01:19",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_SALVAR_NUVEM",
+        "detalhes": "Atualizou o arquivo mestre de tabelas no Supabase"
+    },
+    {
+        "timestamp": "2026-01-06 13:43:14",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_SALVAR_NUVEM",
+        "detalhes": "Atualizou o arquivo mestre de tabelas no Supabase"
+    }
+]
