@@ -1,40 +1,46 @@
-; --- INICIO DO SCRIPT ---
+; --- INICIO DO SCRIPT ATUALIZADO ---
 
 #define MyAppName "Gerenciador Simulador Recon"
-#define MyAppVersion "1.0"
+; IMPORTANTE: Sempre mude a versï¿½o aqui quando gerar um novo instalador (ex: 1.1, 1.2)
+#define MyAppVersion "1.0.4" 
 #define MyAppPublisher "Alessandro Uchoa"
 #define MyAppExeName "GerenciadorSimuladorRecon.exe"
 
 [Setup]
-; ID único do App (Gere um novo no Inno Setup em Tools > Generate GUID se quiser)
+; ID ï¿½nico do App
 AppId={{A3D24891-B789-4D6E-9012-ABCDEF123456}
 
-; Nome e Versão
+; Informaï¿½ï¿½es Bï¿½sicas
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 
-; ONDE VAI INSTALAR: {sd} significa System Drive (geralmente C:)
-; Vai criar C:\SimuladorRecon
+; --- DIRETIVAS DE ATUALIZAï¿½ï¿½O (NOVAS) ---
+; Tenta fechar o aplicativo se ele estiver rodando antes de instalar
+CloseApplications=yes
+; Se nï¿½o conseguir fechar suavemente, forï¿½a o fechamento
+CloseApplicationsFilter=*.exe
+; Nï¿½o pergunta se pode usar a pasta existente (vital para updates)
+DirExistsWarning=no
+; ----------------------------------------
+
+; Diretï¿½rio de Instalaï¿½ï¿½o (C:\Gerenciador Simulador Recon)
 DefaultDirName={sd}\Gerenciador Simulador Recon
-
-; Bloqueia o usuário de mudar a pasta (opcional, remova se quiser permitir)
 DisableDirPage=no
-
-; Nome do grupo no Menu Iniciar
 DefaultGroupName={#MyAppName}
 
-; Permissões Administrativas (Necessário para escrever no C:\)
+; Permissï¿½es para instalar
 PrivilegesRequired=admin
 
-; Pasta onde o instalador final será salvo
+; Saï¿½da do Instalador
 OutputDir=.\Output_Instalador
-OutputBaseFilename=Instalador_GerenciadorSimuladorRecon_v1
+; DICA: O nome do arquivo de saï¿½da pode incluir a versï¿½o para facilitar
+OutputBaseFilename=Setup_GerenciadorSimuladorRecon_v{#MyAppVersion}
 
-; Ícone do instalador (se tiver um .ico, descomente a linha abaixo)
+; ï¿½cone
 SetupIconFile="C:\Users\aless\Desktop\SoftRecon\GeradorConsorcio\logo_recon-consorcio.ico"
 
-; Compressão
+; Compressï¿½o
 Compression=lzma
 SolidCompression=yes
 
@@ -44,26 +50,27 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+[Dirs]
+; Garante que a pasta criada tenha permissï¿½o de escrita para todos os usuï¿½rios
+; Isso evita erros ao salvar logs ou atualizar o users.dat
+Name: "{app}"; Permissions: users-modify
+
 [Files]
-; 1. O EXECUTÁVEL PRINCIPAL (Aponte para onde está seu .exe gerado pelo PyInstaller)
-; IMPORTANTE: Ajuste o caminho "Source" abaixo para a pasta do seu PC
+; 1. O EXECUTï¿½VEL PRINCIPAL
 Source: "C:\Users\aless\Desktop\SoftRecon\GeradorConsorcio\dist\GerenciadorSimuladorRecon.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; 2. ARQUIVOS DE DADOS (users.dat e secret.key)
-; O Flag "onlyifdoesntexist" é VITAL. Ele impede que o instalador sobrescreva
-; os usuários se você lançar uma atualização futura.
+; 2. ARQUIVOS DE DADOS QUE Nï¿½O DEVEM SER SUBSTITUï¿½DOS
+; 'onlyifdoesntexist': Sï¿½ copia se o arquivo nï¿½o existir (preserva dados do usuï¿½rio)
+; 'uninsneveruninstall': Nï¿½o deleta esses arquivos se desinstalar (backup de seguranï¿½a)
 Source: "C:\Users\aless\Desktop\SoftRecon\GeradorConsorcio\dist\users.dat"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "C:\Users\aless\Desktop\SoftRecon\GeradorConsorcio\dist\secret.key"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
-; Cria o atalho no Menu Iniciar
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-
-; Cria o atalho na Área de Trabalho
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Opção para rodar o programa ao terminar a instalação
+; Roda o programa ao finalizar
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 ; --- FIM DO SCRIPT ---

@@ -4,7 +4,7 @@ from supabase import create_client, Client
 
 # --- CONFIGURAÇÃO DO SUPABASE ---
 # Substitua pelos seus dados reais do painel do Supabase
-SUPABASE_URL = "https://nhnejoanmggvinnfphir.supabase.co" 
+SUPABASE_URL = "https://nhnejoanmggvinnfphir.supabase.co/" 
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5obmVqb2FubWdndmlubmZwaGlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjA3NDk5NCwiZXhwIjoyMDgxNjUwOTk0fQ._QXfa-v4YBC_-xazB4A6LrWeB-oxXiIFfboiqbNQh7Q" 
 BUCKET_NAME = "consorciorecon-json"
 

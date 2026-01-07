@@ -6,6 +6,7 @@ import copy
 import json
 from datetime import datetime  
 
+from updater import UpdateManager, CURRENT_VERSION
 from gerador import calcular_simulacao
 from json_utils import (
     salvar_config, carregar_config, 
@@ -42,6 +43,7 @@ class ConsorcioApp:
         
         role_label = " (ADMINISTRADOR)" if self.role == "admin" else " "
         self.root.title(f" Gerenciador de Banco de Dados - Simulador Recon {role_label} | Logado como: {self.username}")
+        self.root.title(f" Simulador Recon v{CURRENT_VERSION} {role_label} | Usuário: {self.username}")
         self.root.geometry("690x670")
         self.root.configure(bg=COLOR_BG)
         
@@ -1328,6 +1330,11 @@ def center_root(r):
     r.geometry("%dx%d+%d+%d" % (size + (x, y)))
 
 def iniciar_aplicacao_principal(user, role): 
+    updater = UpdateManager(root)
+    vai_atualizar = updater.check_for_updates()
+    
+    if vai_atualizar:
+        return
     app = ConsorcioApp(root, current_user_role=role, current_username=user)
     root.geometry("780x670")
     center_root(root)
