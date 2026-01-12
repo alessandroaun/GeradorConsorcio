@@ -35,30 +35,28 @@ def calcular_simulacao(grupo, plano_tipo, prazo, credito_inicial, credito_final,
                 fator_plano = dados_plano['fator']
                 tx_adm = dados_plano['adm']
 
-        # --- 2. Cálculo Matemático (Regra Corrigida) ---
+        # --- 2. Cálculo Matemático (Regra Superlight Corrigida) ---
 
-        # A. Cálculo das Taxas (Adm + Fundo)
-        # Regra: Multiplica-se o crédito (cheio) pela soma da taxa de adm com fundo de reserva
+        # A. Cálculo do Montante Total (Crédito + Taxas Totais)
         soma_taxas_pct = tx_adm + tx_fundo
-        valor_das_taxas = valor_credito * soma_taxas_pct
+        montante_total = valor_credito * (1 + soma_taxas_pct)
 
-        # B. Cálculo da Amortização (Fundo Comum)
-        # Regra: ...soma com o valor de X% do crédito (onde X é o fator do plano)
-        valor_amortizacao = valor_credito * fator_plano
+        # B. Cálculo da Parcela SSV
+        # Se for Grupo 2011 e Plano Superlight (SL), divide por 2 no final
+        if grupo == "2011" and plano_tipo == "SL":
+            parcela_ssv = (montante_total / prazo) / 2
+        else:
+            # Mantém a lógica padrão para os demais planos (Normal/Light)
+            # Para o Light (L), a amortização é reduzida no fator_plano lá em cima
+            valor_das_taxas = valor_credito * soma_taxas_pct
+            valor_amortizacao = valor_credito * fator_plano
+            parcela_ssv = (valor_das_taxas + valor_amortizacao) / prazo
 
-        # C. Parcela Sem Seguro de Vida (SSV)
-        # Regra: (Valor das Taxas + Valor Amortização) / Prazo
-        montante_para_parcela = valor_das_taxas + valor_amortizacao
-        parcela_ssv = montante_para_parcela / prazo
+        # C. Cálculo do Seguro (Incide sobre o montante total: Crédito + Taxas)
+        # Regra: (Crédito + 28%) * 0,059%
+        valor_seguro = montante_total * tx_seguro
 
-        # D. Cálculo do Seguro
-        # Regra: Soma-se o crédito (cheio) com a taxa de adm e fundo. Do resultado multiplica pelo % do seguro.
-        # Obs: Crédito Cheio + Valor das Taxas calculadas acima
-        saldo_devedor_total = valor_credito + valor_das_taxas
-        valor_seguro = saldo_devedor_total * tx_seguro
-
-        # E. Parcela Com Seguro de Vida (CSV)
-        # Regra: Parcela SSV + Valor do Seguro
+        # D. Parcela Com Seguro de Vida (CSV)
         parcela_csv = parcela_ssv + valor_seguro
 
         # --- 3. Montagem do Objeto ---
