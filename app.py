@@ -117,8 +117,11 @@ class ConsorcioApp:
             'msg': {'input': tk.StringVar()}
         }
 
-        self.setup_tab_padrao(self.tab_2011, "2011", ["Normal", "Light", "SuperLight"], ["N", "L", "SL"])
-        self.setup_tab_padrao(self.tab_5121, "5121", ["Normal", "Light"], ["N", "L"])
+        # --- ALTERADO AQUI PARA INCLUIR OPÇÃO "TODAS" ---
+        self.setup_tab_padrao(self.tab_2011, "2011", ["Normal", "Light", "SuperLight", "Todas"], ["N", "L", "SL", "TODAS"])
+        self.setup_tab_padrao(self.tab_5121, "5121", ["Normal", "Light", "Todas"], ["N", "L", "TODAS"])
+        # ------------------------------------------------
+        
         self.setup_tab_especial()
         self.setup_tab_editor()
         self.setup_tab_pdf()
@@ -1264,18 +1267,64 @@ class ConsorcioApp:
         dados = {k: {sk: sv.get() for sk, sv in v.items()} for k, v in self.vars.items() if k not in ['pdf','editor', 'msg']}
         salvar_config(dados)
     
+    # --- ALTERADO AQUI PARA SUPORTAR "TODAS" ---
     def gerar_padrao(self, grupo):
-        self.salvar_estado_atual(); d = self.vars[grupo]; pl = d['plano'].get()
-        chave = f"t_{('imovel' if grupo=='2011' else 'auto')}{grupo}_{('normal' if pl=='N' else pl)}"
-        try:
-            res = calcular_simulacao(grupo, pl, d['prazo'].get(), d['credito_ini'].get(), d['credito_fim'].get(), d['passo'].get())
-            salvar_dados_tabelas(chave, res); 
-            self._registrar_log("GERADOR_CLOUD", f"Gerou tabela {chave} para nuvem")
-            messagebox.showinfo("Sucesso", f"Tabela {chave} atualizada no servidor!")
-        except Exception as e: messagebox.showerror("Erro Crítico", f"Falha ao gerar/upload:\n{str(e)}")
+        self.salvar_estado_atual()
+        d = self.vars[grupo]
+        pl_selecionado = d['plano'].get()
+
+        # Verifica se o usuário selecionou "Todas"
+        if pl_selecionado == 'TODAS':
+            # Define quais planos gerar baseado no grupo
+            if grupo == '2011':
+                lista_planos = ['N', 'L', 'SL']
+            else: # 5121
+                lista_planos = ['N', 'L']
+        else:
+            lista_planos = [pl_selecionado]
+
+        erros = []
+        sucessos = []
+
+        # Itera sobre os planos para gerar (1 ou todos)
+        for pl in lista_planos:
+            suffix = 'normal' if pl == 'N' else pl
+            prefix = 'imovel' if grupo == '2011' else 'auto'
+            chave = f"t_{prefix}{grupo}_{suffix}"
+            
+            try:
+                # Chama a função de cálculo com o plano específico
+                res = calcular_simulacao(
+                    grupo, 
+                    pl, 
+                    d['prazo'].get(), 
+                    d['credito_ini'].get(), 
+                    d['credito_fim'].get(), 
+                    d['passo'].get()
+                )
+                salvar_dados_tabelas(chave, res)
+                sucessos.append(chave)
+            except Exception as e:
+                erros.append(f"{chave}: {str(e)}")
+
+        # Feedback ao usuário
+        if erros:
+            msg_erro = "\n".join(erros)
+            messagebox.showerror("Erros durante atualização", f"Sucessos: {len(sucessos)}\nFalhas:\n{msg_erro}")
+        else:
+            if len(sucessos) > 1:
+                self._registrar_log("GERADOR_CLOUD_BATCH", f"Gerou tabelas em lote para {grupo}: {', '.join(sucessos)}")
+                messagebox.showinfo("Sucesso Total", f"Todas as tabelas do grupo {grupo} foram atualizadas!\n({', '.join(sucessos)})")
+            else:
+                self._registrar_log("GERADOR_CLOUD", f"Gerou tabela {sucessos[0]} para nuvem")
+                messagebox.showinfo("Sucesso", f"Tabela {sucessos[0]} atualizada no servidor!")
+    # ---------------------------------------------
 
     def gerar_padrao_local(self, grupo):
         self.salvar_estado_atual(); d = self.vars[grupo]; pl = d['plano'].get()
+        if pl == "TODAS":
+            messagebox.showwarning("Aviso", "O modo 'Todas' não está disponível para salvamento local (escolha um plano específico).")
+            return
         chave = f"t_{('imovel' if grupo=='2011' else 'auto')}{grupo}_{('normal' if pl=='N' else pl)}"
         path = filedialog.asksaveasfilename(title=f"Salvar {chave} Local", defaultextension=".json", filetypes=[("JSON", "*.json")], initialfile=f"{chave}.json")
         if not path: return

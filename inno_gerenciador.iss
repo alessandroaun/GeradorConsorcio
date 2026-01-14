@@ -2,7 +2,7 @@
 
 #define MyAppName "Gerenciador Simulador Recon"
 ; IMPORTANTE: Sempre mude a vers�o aqui quando gerar um novo instalador (ex: 1.1, 1.2)
-#define MyAppVersion "1.0.5" 
+#define MyAppVersion "1.0.6" 
 #define MyAppPublisher "Alessandro Uchoa"
 #define MyAppExeName "GerenciadorSimuladorRecon.exe"
 
