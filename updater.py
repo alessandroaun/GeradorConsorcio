@@ -7,7 +7,7 @@ from threading import Thread
 
 # --- CONFIGURAÇÃO ---
 # Lembre-se de mudar isso antes de gerar o executável
-CURRENT_VERSION = "1.0.6" 
+CURRENT_VERSION = "1.0.7" 
 
 # URL DO JSON NO SUPABASE
 URL_VERSION_JSON = "https://nhnejoanmggvinnfphir.supabase.co/storage/v1/object/public/upadates/updates/version.json"

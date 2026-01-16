@@ -893,12 +893,24 @@ class ConsorcioApp:
             self.log_pdf(f"💾 Salvo em: {path_save}"); messagebox.showinfo("Sucesso", "Dados extraídos e salvos localmente!")
         except Exception as e: self.log_pdf(f"❌ Erro ao salvar: {e}")
 
-    # --- ABA RELAÇÃO (CLOUD & LOCAL) ---
+    # --- SUBSTITUA O MÉTODO setup_tab_relacao E AS FUNÇÕES BI ABAIXO ---
+
     def setup_tab_relacao(self):
-        content = ttk.Frame(self.tab_relacao, style="Main.TFrame", padding=10)
+        # Cria um Notebook (Abas) dentro da aba Relação de Grupos
+        self.notebook_relacao_sub = ttk.Notebook(self.tab_relacao)
+        self.notebook_relacao_sub.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Cria os frames para as duas sub-abas
+        self.frame_rel_original = ttk.Frame(self.notebook_relacao_sub, style="Main.TFrame")
+        self.frame_rel_bi = ttk.Frame(self.notebook_relacao_sub, style="Main.TFrame")
+
+        self.notebook_relacao_sub.add(self.frame_rel_original, text=' Relação de Grupos (Padrão) ')
+        self.notebook_relacao_sub.add(self.frame_rel_bi, text=' Relação de Grupos BI (Atualizada) ')
+
+        # --- 1. CONFIGURAÇÃO DA ABA ORIGINAL (MANTIDA IGUAL) ---
+        content = ttk.Frame(self.frame_rel_original, style="Main.TFrame", padding=10)
         content.pack(fill='both', expand=True)
         
-        # Barra Superior (Upload/Download)
         top_bar = ttk.Frame(content, style="Main.TFrame")
         top_bar.pack(fill='x', pady=(0, 10))
         ttk.Button(top_bar, text="⬇️ Carregar Relação de Grupos", style="Sec.TButton", command=self.relacao_carregar_nuvem).pack(side='left', padx=(0, 5))
@@ -908,11 +920,9 @@ class ConsorcioApp:
         ttk.Button(top_bar, text="☁️ ENVIAR", style="Action.TButton", command=self.relacao_salvar_nuvem).pack(side='right', padx=(5, 0))
         ttk.Button(top_bar, text="↩ Desfazer", style="Warning.TButton", command=self.relacao_reverter).pack(side='right')
         
-        # Painel Dividido (Lista | Detalhes)
         paned = tk.PanedWindow(content, orient=tk.HORIZONTAL, bg=COLOR_BG, sashwidth=4, showhandle=True)
         paned.pack(fill='both', expand=True)
         
-        # Coluna Esquerda: Lista de Grupos
         frame_list = ttk.Frame(paned, style="Main.TFrame")
         paned.add(frame_list, width=220)
         
@@ -928,16 +938,13 @@ class ConsorcioApp:
         scroll_lst.config(command=self.lst_grupos.yview)
         self.lst_grupos.bind('<<ListboxSelect>>', self.relacao_selecionar_grupo)
         
-        # Coluna Direita: Campos Dinâmicos
         right_panel = ttk.Frame(paned, style="Main.TFrame", padding=(10, 0, 0, 0))
         paned.add(right_panel)
         
         toolbar_fields = ttk.LabelFrame(right_panel, text="Adicione ou Remova Campos de Informações", style="Card.TLabelframe", padding=5)
         toolbar_fields.pack(fill='x', pady=(0, 5))
-        
         ttk.Button(toolbar_fields, text="➕ Add Global", style="Sec.TButton", command=self.relacao_add_global_field).pack(side='left', padx=(0, 5))
         ttk.Button(toolbar_fields, text="➕ Add Local", style="Sec.TButton", command=self.relacao_add_local_field).pack(side='left', padx=(0, 5)) 
-        
         ttk.Button(toolbar_fields, text="➖ Del Global", style="Warning.TButton", command=self.relacao_del_global_field).pack(side='right', padx=(5, 0))
         ttk.Button(toolbar_fields, text="➖ Del Local", style="Sec.TButton", command=self.relacao_del_local_field).pack(side='right')
         
@@ -949,6 +956,336 @@ class ConsorcioApp:
         self.canvas_relacao.configure(yscrollcommand=scroll_y.set)
         self.canvas_relacao.pack(side="left", fill="both", expand=True)
         scroll_y.pack(side="right", fill="y")
+
+        # --- 2. CONFIGURAÇÃO DA NOVA ABA (BI - CLOUD) ---
+        self.setup_aba_bi(self.frame_rel_bi)
+
+    # --- LÓGICA BI COM PROTEÇÃO DE CAMPOS E SCROLL ---
+
+    def setup_aba_bi(self, parent):
+        self.bi_data = {}
+        self.bi_root_data = {}
+        self.bi_vars_cache = {}
+        self.bi_selected_grupo = None
+        self.FILE_RELACAO_BI = "relacao_atualizada.json"
+        
+        # LISTA DE CAMPOS PADRÕES (PROTEGIDOS)
+        self.KEYS_PADRAO = [
+            "Grupo", "Espécie", "Vagas", "Duração Padrão", "Ass. Realizadas",
+            "Prazo Máx. Vendas", "Máx. Cotas", "Créditos Disponíveis",
+            "Lance Normal", "Lance Fixo", "Carta Avaliação", "Lance FGTS",
+            "Lance Embutido (25%)", "Dia do Vencimento", "Próxima Assembleia"
+        ]
+
+        content = ttk.Frame(parent, style="Main.TFrame", padding=10)
+        content.pack(fill='both', expand=True)
+
+        # Top Bar
+        top = ttk.Frame(content, style="Main.TFrame")
+        top.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(top, text="⬇️ Carregar (Nuvem)", style="Sec.TButton", command=self.bi_carregar_nuvem).pack(side='left', padx=(0, 5))
+        self.lbl_bi_status = ttk.Label(top, text="...", foreground=COLOR_TEXT_SUB)
+        self.lbl_bi_status.pack(side='left', padx=5)
+
+        ttk.Button(top, text="💾 Salvar Local", style="Sec.TButton", command=self.bi_salvar_local).pack(side='right', padx=(5, 0))
+        ttk.Button(top, text="☁️ ENVIAR", style="Action.TButton", command=self.bi_salvar_nuvem).pack(side='right')
+
+        # Paned Window
+        paned = tk.PanedWindow(content, orient=tk.HORIZONTAL, bg=COLOR_BG, sashwidth=4, showhandle=True)
+        paned.pack(fill='both', expand=True)
+
+        # Esquerda: Lista
+        frame_list = ttk.Frame(paned, style="Main.TFrame")
+        paned.add(frame_list, width=200)
+
+        self.lbl_bi_last_update = ttk.Label(frame_list, text="Atualizado em: --/--/----", font=("Segoe UI", 8), foreground=COLOR_TEXT_SUB)
+        self.lbl_bi_last_update.pack(anchor='w', pady=(0,5))
+
+        scroll_bi = ttk.Scrollbar(frame_list)
+        scroll_bi.pack(side='right', fill='y')
+        
+        self.lst_bi_grupos = tk.Listbox(frame_list, font=("Segoe UI", 9), borderwidth=1, relief="solid", yscrollcommand=scroll_bi.set)
+        self.lst_bi_grupos.pack(side='left', fill='both', expand=True)
+        scroll_bi.config(command=self.lst_bi_grupos.yview)
+        self.lst_bi_grupos.bind('<<ListboxSelect>>', self.bi_selecionar_grupo)
+
+        # Direita: Detalhes
+        frame_detail = ttk.Frame(paned, style="Main.TFrame", padding=(10,0,0,0))
+        paned.add(frame_detail)
+
+        # Toolbar de Botões
+        tool_bi = ttk.LabelFrame(frame_detail, text="Gerenciamento de Campos", style="Card.TLabelframe", padding=5)
+        tool_bi.pack(fill='x', pady=(0,5))
+        
+        # Botões organizados
+        f_btns = ttk.Frame(tool_bi, style="Main.TFrame")
+        f_btns.pack(fill='x')
+        
+        ttk.Button(f_btns, text="➕ Add Campo Global", style="Action.TButton", command=self.bi_add_global).pack(side='left', fill='x', expand=True, padx=(0,2))
+        ttk.Button(f_btns, text="➕ Add Campo Local", style="Sec.TButton", command=self.bi_add_local).pack(side='left', fill='x', expand=True, padx=2)
+        ttk.Button(f_btns, text="➖ Del Campo Global", style="Warning.TButton", command=self.bi_del_global).pack(side='left', fill='x', expand=True, padx=(2,0))
+
+        # Canvas com Scroll
+        self.canvas_bi = tk.Canvas(frame_detail, bg=COLOR_BG, highlightthickness=0)
+        sb_bi = ttk.Scrollbar(frame_detail, orient="vertical", command=self.canvas_bi.yview)
+        
+        self.frame_bi_fields = ttk.Frame(self.canvas_bi, style="Main.TFrame")
+        self.frame_bi_fields.bind("<Configure>", lambda e: self.canvas_bi.configure(scrollregion=self.canvas_bi.bbox("all")))
+        
+        # BINDING DO SCROLL MOUSE - Para funcionar o scroll
+        self.canvas_bi.bind_all("<MouseWheel>", self._on_mousewheel) # Windows
+        self.canvas_bi.bind_all("<Button-4>", self._on_mousewheel)   # Linux Scroll Up
+        self.canvas_bi.bind_all("<Button-5>", self._on_mousewheel)   # Linux Scroll Down
+        
+        self.canvas_bi.create_window((0, 0), window=self.frame_bi_fields, anchor="nw")
+        self.canvas_bi.configure(yscrollcommand=sb_bi.set)
+        
+        self.canvas_bi.pack(side="left", fill="both", expand=True)
+        sb_bi.pack(side="right", fill="y")
+
+    def _on_mousewheel(self, event):
+        # Verifica se o mouse está sobre a janela (simples) ou apenas rola
+        # Para evitar conflito, geralmente verificamos se a aba BI está visível
+        if self.notebook.select() == str(self.tab_relacao) and self.notebook_relacao_sub.select() == str(self.frame_rel_bi):
+            if event.num == 5 or event.delta < 0:
+                self.canvas_bi.yview_scroll(1, "units")
+            elif event.num == 4 or event.delta > 0:
+                self.canvas_bi.yview_scroll(-1, "units")
+
+    def bi_carregar_nuvem(self):
+        self.lbl_bi_status.config(text="Baixando...", foreground=COLOR_WARNING)
+        self.root.update()
+        try:
+            data = download_json_supabase(self.FILE_RELACAO_BI)
+            
+            self.bi_data = {}
+            self.bi_root_data = {}
+            lista_grupos = []
+
+            if isinstance(data, dict) and "grupos" in data:
+                self.bi_root_data = {k:v for k,v in data.items() if k != "grupos"}
+                lista_grupos = data["grupos"]
+                last_up = self.bi_root_data.get("ultima_atualizacao", "Desconhecido")
+                self.lbl_bi_last_update.config(text=f"Atualizado em: {last_up}")
+            elif isinstance(data, list):
+                lista_grupos = data
+                self.lbl_bi_last_update.config(text="Atualizado em: N/A")
+            
+            count = 0
+            for item in lista_grupos:
+                grp = str(item.get("Grupo", "N/A"))
+                if grp == "N/A": continue
+                self.bi_data[grp] = item
+                count += 1
+            
+            self.lbl_bi_status.config(text=f"Carregado: {count} grupos.", foreground=COLOR_SUCCESS)
+            self._bi_refresh_list()
+            self._registrar_log("BI_LOAD_CLOUD", f"Baixou {self.FILE_RELACAO_BI}")
+
+        except Exception as e:
+            self.lbl_bi_status.config(text="Erro Download", foreground=COLOR_DANGER)
+            messagebox.showerror("Erro", f"Falha ao baixar:\n{str(e)}")
+
+    def _bi_refresh_list(self):
+        self.lst_bi_grupos.delete(0, tk.END)
+        try: keys = sorted(self.bi_data.keys(), key=lambda x: int(x))
+        except: keys = sorted(self.bi_data.keys())
+        for k in keys: self.lst_bi_grupos.insert(tk.END, k)
+        for widget in self.frame_bi_fields.winfo_children(): widget.destroy()
+
+    def bi_selecionar_grupo(self, event):
+        sel = self.lst_bi_grupos.curselection()
+        if not sel: return
+        grp_id = self.lst_bi_grupos.get(sel[0])
+        self.bi_salvar_memoria_atual()
+        self.bi_selected_grupo = grp_id
+        self._bi_renderizar_campos(grp_id)
+
+    def _bi_renderizar_campos(self, grp_id):
+        for widget in self.frame_bi_fields.winfo_children(): widget.destroy()
+        self.bi_vars_cache = {}
+        
+        dados = self.bi_data.get(grp_id, {})
+        
+        # Título
+        ttk.Label(self.frame_bi_fields, text=f"Detalhes do Grupo {grp_id}", font=("Segoe UI", 10, "bold"), foreground=COLOR_PRIMARY).pack(anchor='w', pady=(0,10))
+
+        # Organização: Padrões primeiro
+        chaves_padrao = [k for k in self.KEYS_PADRAO if k in dados]
+        chaves_custom = [k for k in dados.keys() if k not in self.KEYS_PADRAO]
+        
+        todas_chaves = chaves_padrao + chaves_custom
+
+        for key in todas_chaves:
+            val = dados[key]
+            row = ttk.Frame(self.frame_bi_fields, style="Main.TFrame")
+            row.pack(fill='x', pady=2)
+
+            # Verifica se é padrão (Hardcoded)
+            is_padrao = key in self.KEYS_PADRAO
+            
+            lbl_text = f"{key} 🔒" if is_padrao else key
+            lbl_style = "Sub.TLabel" if is_padrao else "TLabel"
+            
+            ttk.Label(row, text=lbl_text, width=25, style=lbl_style).pack(side='left')
+            
+            var = tk.StringVar(value=str(val))
+            self.bi_vars_cache[key] = var
+            
+            entry = ttk.Entry(row, textvariable=var)
+            
+            # Se for padrão, bloqueia edição
+            if is_padrao:
+                entry.config(state='readonly')
+            
+            entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
+
+            # Se for customizado, permite excluir
+            if not is_padrao:
+                btn_del = tk.Button(row, text="❌", bg="#FEE2E2", fg="red", bd=0, cursor="hand2",
+                                    command=lambda k=key: self.bi_excluir_chave_especifica(k))
+                btn_del.pack(side='right')
+
+    def bi_salvar_memoria_atual(self):
+        if self.bi_selected_grupo and self.bi_selected_grupo in self.bi_data:
+            for k, var in self.bi_vars_cache.items():
+                # Pula campos que não estão mais nos dados (excluídos) ou que são readonly (teoricamente não mudam, mas garante integridade)
+                if k not in self.bi_data[self.bi_selected_grupo]: continue
+                
+                # Se for campo padrão, não atualiza (garantia extra)
+                if k in self.KEYS_PADRAO: continue
+
+                val = var.get()
+                try: 
+                    if val.isdigit(): val = int(val)
+                    elif val.replace('.', '', 1).isdigit(): val = float(val)
+                except: pass
+                self.bi_data[self.bi_selected_grupo][k] = val
+
+    def bi_add_global(self):
+        if not self.bi_data: return messagebox.showwarning("Aviso", "Carregue os dados.")
+        
+        key_name = simpledialog.askstring("Add Global", "Nome do campo (será adicionado em TODOS os grupos):")
+        if not key_name: return
+
+        if key_name in self.KEYS_PADRAO:
+            return messagebox.showerror("Erro", "Este nome de campo é reservado pelo sistema.")
+
+        val_default = simpledialog.askstring("Valor Inicial", f"Valor para '{key_name}':")
+        if val_default is None: return
+
+        count = 0
+        for grp in self.bi_data:
+            if key_name not in self.bi_data[grp]:
+                self.bi_data[grp][key_name] = val_default
+                count += 1
+        
+        if self.bi_selected_grupo:
+            self.bi_salvar_memoria_atual()
+            self._bi_renderizar_campos(self.bi_selected_grupo)
+        
+        messagebox.showinfo("Sucesso", f"Campo '{key_name}' criado em {count} grupos.")
+
+    def bi_add_local(self):
+        if not self.bi_selected_grupo: return messagebox.showwarning("Aviso", "Selecione um grupo na lista.")
+        
+        key_name = simpledialog.askstring("Add Local", f"Nome do campo (apenas para o grupo {self.bi_selected_grupo}):")
+        if not key_name: return
+
+        if key_name in self.KEYS_PADRAO:
+            return messagebox.showerror("Erro", "Este nome de campo é reservado pelo sistema.")
+        
+        if key_name in self.bi_data[self.bi_selected_grupo]:
+             return messagebox.showerror("Erro", "Campo já existe neste grupo.")
+
+        val_default = simpledialog.askstring("Valor", f"Valor para '{key_name}':")
+        if val_default is None: return
+
+        self.bi_data[self.bi_selected_grupo][key_name] = val_default
+        self.bi_salvar_memoria_atual()
+        self._bi_renderizar_campos(self.bi_selected_grupo)
+
+    def bi_del_global(self):
+        if not self.bi_data: return
+        key_name = simpledialog.askstring("Excluir Global", "Nome do campo a ser removido de TODOS os grupos:")
+        if not key_name: return
+
+        if key_name in self.KEYS_PADRAO:
+            return messagebox.showerror("Proibido", f"O campo '{key_name}' é padrão do sistema e não pode ser excluído.")
+
+        if not messagebox.askyesno("Cuidado", f"Tem certeza que deseja apagar '{key_name}' de TODOS os grupos?"):
+            return
+
+        count = 0
+        for grp in self.bi_data:
+            if key_name in self.bi_data[grp]:
+                del self.bi_data[grp][key_name]
+                count += 1
+        
+        if self.bi_selected_grupo:
+            self._bi_renderizar_campos(self.bi_selected_grupo)
+            
+        messagebox.showinfo("Sucesso", f"Removido de {count} grupos.")
+
+    def bi_excluir_chave_especifica(self, key):
+        if not self.bi_selected_grupo: return
+        # Checagem redundante, mas segura
+        if key in self.KEYS_PADRAO:
+            return messagebox.showerror("Proibido", "Campo Padrão Protegido.")
+
+        if messagebox.askyesno("Confirmar", f"Excluir '{key}' deste grupo?"):
+            del self.bi_data[self.bi_selected_grupo][key]
+            self._bi_renderizar_campos(self.bi_selected_grupo)
+
+    def _bi_montar_estrutura_final(self):
+        self.bi_salvar_memoria_atual()
+        final_list = list(self.bi_data.values())
+        try: final_list.sort(key=lambda x: int(x.get("Grupo", 0)))
+        except: pass
+        
+        nova_data = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        estrutura_final = self.bi_root_data.copy()
+        estrutura_final["ultima_atualizacao"] = nova_data
+        estrutura_final["grupos"] = final_list
+        return estrutura_final, nova_data
+
+    def bi_salvar_nuvem(self):
+        if not self.bi_data: return
+        self.lbl_bi_status.config(text="Enviando...", foreground=COLOR_WARNING)
+        self.root.update()
+        try:
+            dados, nova_data = self._bi_montar_estrutura_final()
+            upload_json_supabase(self.FILE_RELACAO_BI, dados)
+            self.lbl_bi_status.config(text="Sucesso!", foreground=COLOR_SUCCESS)
+            self.lbl_bi_last_update.config(text=f"Atualizado em: {nova_data}")
+            self.bi_root_data["ultima_atualizacao"] = nova_data
+            messagebox.showinfo("Sucesso", "Atualizado na nuvem!")
+            self._registrar_log("BI_UPLOAD", "Atualizou relacao_atualizada.json")
+        except Exception as e:
+            self.lbl_bi_status.config(text="Erro", foreground=COLOR_DANGER)
+            messagebox.showerror("Erro", str(e))
+
+    def bi_salvar_local(self):
+        if not self.bi_data: return
+        path = filedialog.asksaveasfilename(initialfile=self.FILE_RELACAO_BI, filetypes=[("JSON","*.json")])
+        if not path: return
+        try:
+            dados, _ = self._bi_montar_estrutura_final()
+            with open(path, 'w', encoding='utf-8') as f: json.dump(dados, f, indent=4, ensure_ascii=False)
+            messagebox.showinfo("Sucesso", "Salvo localmente!")
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+
+    def bi_excluir_chave_especifica(self, key):
+        if not self.bi_selected_grupo: return
+        if key in self.bi_protected.get(self.bi_selected_grupo, set()):
+            messagebox.showerror("Proibido", "Esta informação é original do arquivo e está protegida.")
+            return
+            
+        if messagebox.askyesno("Confirmar", f"Excluir a informação '{key}' deste grupo?"):
+            del self.bi_data[self.bi_selected_grupo][key]
+            self._bi_renderizar_campos(self.bi_selected_grupo)
 
     # --- Lógica Relação ---
     def relacao_carregar_nuvem(self):

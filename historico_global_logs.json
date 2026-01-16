@@ -47,5 +47,173 @@
         "cargo": "admin",
         "acao": "EDITOR_SALVAR_NUVEM",
         "detalhes": "Atualizou o arquivo mestre de tabelas no Supabase"
+    },
+    {
+        "timestamp": "2026-01-07 09:28:58",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_ativos_14_06_2025 (1).pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-01-07 09:31:36",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_geral_13_12_2025_bb1aXhh.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-01-12 08:42:15",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_SL para nuvem"
+    },
+    {
+        "timestamp": "2026-01-12 11:32:13",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_SL para nuvem"
+    },
+    {
+        "timestamp": "2026-01-13 13:57:48",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_SL para nuvem"
+    },
+    {
+        "timestamp": "2026-01-13 14:01:41",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_ativos_24_05_2025.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-01-13 15:38:20",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_SL para nuvem"
+    },
+    {
+        "timestamp": "2026-01-13 15:39:05",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_geral_27_12_2025.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-01-13 15:40:12",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_ESPECIAL",
+        "detalhes": "Criou tabela t_custom01 na nuvem"
+    },
+    {
+        "timestamp": "2026-01-13 15:43:53",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_SALVAR_NUVEM",
+        "detalhes": "Atualizou o arquivo mestre de tabelas no Supabase"
+    },
+    {
+        "timestamp": "2026-01-14 19:12:59",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_auto5121_L para nuvem"
+    },
+    {
+        "timestamp": "2026-01-14 19:17:22",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_L para nuvem"
+    },
+    {
+        "timestamp": "2026-01-14 19:19:53",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_SL para nuvem"
+    },
+    {
+        "timestamp": "2026-01-14 19:21:18",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_auto5121_normal para nuvem"
+    },
+    {
+        "timestamp": "2026-01-14 19:43:53",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Gerou tabelas em lote para 5121: t_auto5121_normal, t_auto5121_L"
+    },
+    {
+        "timestamp": "2026-01-16 17:54:33",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Gerou tabelas em lote para 5121: t_auto5121_normal, t_auto5121_L"
+    },
+    {
+        "timestamp": "2026-01-16 17:59:20",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Gerou tabelas em lote para 5121: t_auto5121_normal, t_auto5121_L"
+    },
+    {
+        "timestamp": "2026-01-16 18:01:09",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Gerou tabelas em lote para 5121: t_auto5121_normal, t_auto5121_L"
+    },
+    {
+        "timestamp": "2026-01-16 18:02:31",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_auto5121_normal para nuvem"
+    },
+    {
+        "timestamp": "2026-01-16 18:05:58",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_normal para nuvem"
+    },
+    {
+        "timestamp": "2026-01-16 18:25:55",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_imovel2011_L para nuvem"
+    },
+    {
+        "timestamp": "2026-01-16 19:11:53",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_LOAD_CLOUD",
+        "detalhes": "Baixou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-01-16 19:15:40",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_ADD_GLOBAL",
+        "detalhes": "Adicionou chave global 'Plano'"
+    },
+    {
+        "timestamp": "2026-01-16 20:19:33",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_LOAD_CLOUD",
+        "detalhes": "Baixou relacao_atualizada.json"
     }
 ]
