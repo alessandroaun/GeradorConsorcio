@@ -215,5 +215,166 @@
         "cargo": "admin",
         "acao": "BI_LOAD_CLOUD",
         "detalhes": "Baixou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-01-16 20:52:22",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_LOAD_CLOUD",
+        "detalhes": "Baixou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-01-16 20:56:53",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_UPLOAD",
+        "detalhes": "Atualizou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-01-16 21:00:50",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_LOAD_CLOUD",
+        "detalhes": "Baixou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-01-16 22:13:18",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Atualizou 2011 (Todas) via lote otimizado"
+    },
+    {
+        "timestamp": "2026-01-16 22:14:17",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Atualizou 2011 (Todas) via lote otimizado"
+    },
+    {
+        "timestamp": "2026-01-16 22:15:46",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Atualizou 2011 (Todas) via lote otimizado"
+    },
+    {
+        "timestamp": "2026-01-16 22:17:50",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_LOAD_CLOUD",
+        "detalhes": "Baixou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-01-19 19:03:55",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF Contemplados_geral_17_01_2026.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-01-30 08:44:39",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_geral_y65eZvY.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-02-19 10:19:06",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Atualizou 2011 (Todas) via lote otimizado"
+    },
+    {
+        "timestamp": "2026-02-19 10:21:11",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD",
+        "detalhes": "Gerou tabela t_auto5121_L para nuvem"
+    },
+    {
+        "timestamp": "2026-02-19 10:42:38",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "GERADOR_CLOUD_BATCH",
+        "detalhes": "Atualizou 5121 (Todas) via lote otimizado"
+    },
+    {
+        "timestamp": "2026-02-23 16:44:42",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_ativos_21_02_2026.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-02-25 15:17:22",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_LOAD_CLOUD",
+        "detalhes": "Baixou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-02-25 15:21:13",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "BI_UPLOAD",
+        "detalhes": "Atualizou relacao_atualizada.json"
+    },
+    {
+        "timestamp": "2026-02-27 11:33:55",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "PDF_PROCESS_CLOUD",
+        "detalhes": "Processou PDF contemplados_ativos_25_02_2026.pdf na nuvem"
+    },
+    {
+        "timestamp": "2026-02-27 17:18:04",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_PRAZO",
+        "detalhes": "Excluiu prazo index 0 do crédito 4 tabela t_imovel_normal"
+    },
+    {
+        "timestamp": "2026-02-27 17:19:01",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_DELETE_PRAZO",
+        "detalhes": "Excluiu prazo index 0 do crédito 14 tabela t_imovel_normal"
+    },
+    {
+        "timestamp": "2026-02-27 17:19:08",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "EDITOR_SALVAR_NUVEM",
+        "detalhes": "Atualizou o arquivo mestre de tabelas no Supabase"
+    },
+    {
+        "timestamp": "2026-03-09 16:09:20",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "SUPABASE_UPDATE_NAME",
+        "detalhes": "Alterou o nome de alessandroaun@gmail.com para Alessandro (Filial Fortaleza 2)"
+    },
+    {
+        "timestamp": "2026-03-09 16:10:48",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "SUPABASE_DEL_USER",
+        "detalhes": "Excluiu usuário do simulador: aleuchoaconsorcio@gmail.com"
+    },
+    {
+        "timestamp": "2026-03-09 16:11:38",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "SUPABASE_INVITE_USER",
+        "detalhes": "Enviou convite de acesso para: aleuchoaconsorcio@gmail.com"
+    },
+    {
+        "timestamp": "2026-03-09 17:41:25",
+        "usuario": "admin",
+        "cargo": "admin",
+        "acao": "SUPABASE_UPDATE_NAME",
+        "detalhes": "Alterou o nome de caiotn.ct@gmail.com para Caio (Filial Fortaleza)"
     }
 ]

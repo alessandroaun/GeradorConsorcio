@@ -1,9 +1,18 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, simpledialog, filedialog
 import threading
+import sys
 import os
 import copy
 import json
+from datetime import datetime
+
+if getattr(sys, 'frozen', False):
+    application_path = os.path.dirname(sys.executable)
+    os.chdir(application_path)
+else:
+    application_path = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(application_path) 
 from datetime import datetime  
 
 from updater import UpdateManager, CURRENT_VERSION
@@ -80,6 +89,7 @@ class ConsorcioApp:
         self.tab_pdf = ttk.Frame(self.notebook, style="Main.TFrame")
         self.tab_relacao = ttk.Frame(self.notebook, style="Main.TFrame")
         self.tab_mensagens = ttk.Frame(self.notebook, style="Main.TFrame") 
+        self.tab_sim_users = ttk.Frame(self.notebook, style="Main.TFrame")
 
         self.notebook.add(self.tab_2011, text=' Editar 2011 ')
         self.notebook.add(self.tab_5121, text=' Editar 5121 ')
@@ -88,6 +98,7 @@ class ConsorcioApp:
         self.notebook.add(self.tab_pdf, text=' Leitor PDF das Assembleias ')
         self.notebook.add(self.tab_relacao, text=' Relação de Grupos ')
         self.notebook.add(self.tab_mensagens, text=' Informativos ') 
+        self.notebook.add(self.tab_sim_users, text=' Usuários do Simulador (Supabase) ')
 
         self.last_config = carregar_config()
 
@@ -127,6 +138,7 @@ class ConsorcioApp:
         self.setup_tab_pdf()
         self.setup_tab_relacao()
         self.setup_tab_mensagens() 
+        self.setup_tab_sim_users()
 
     # --- SISTEMA DE LOG GLOBAL (NUVEM + LOCAL) ---
     def _registrar_log(self, acao, detalhes):
@@ -220,6 +232,17 @@ class ConsorcioApp:
             'passo': tk.DoubleVar(value=saved.get('passo', 10000.0)),
             'apenas_csv': tk.BooleanVar(value=saved.get('apenas_csv', False))
         }
+    
+    def log_tab(self, key, message):
+        """Escreve no log visual da aba específica (2011 ou 5121)"""
+        if hasattr(self, 'tab_logs') and key in self.tab_logs:
+            widget = self.tab_logs[key]
+            widget.config(state='normal')
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            widget.insert(tk.END, f"[{timestamp}] {message}\n")
+            widget.see(tk.END)
+            widget.config(state='disabled')
+            self.root.update_idletasks()
 
     def add_linha_compacta(self, parent, label_text, variable, row, col, tipo="texto", width=10):
         cell = ttk.Frame(parent, style="Main.TFrame")
@@ -471,10 +494,13 @@ class ConsorcioApp:
     def setup_tab_padrao(self, parent, key, radio_labels, radio_values):
         content = ttk.Frame(parent, style="Main.TFrame", padding=10)
         content.pack(fill='both', expand=True)
+        
+        # --- Configurações (Mantido) ---
         lf_plano = ttk.LabelFrame(content, text="PLANO", style="Card.TLabelframe", padding=5)
         lf_plano.pack(fill='x', pady=(0, 10))
         for text, val in zip(radio_labels, radio_values):
             ttk.Radiobutton(lf_plano, text=text, variable=self.vars[key]['plano'], value=val).pack(side='left', padx=10)
+        
         lf_val = ttk.LabelFrame(content, text="VALORES", style="Card.TLabelframe", padding=8)
         lf_val.pack(fill='x', pady=(0, 10))
         self.add_linha_compacta(lf_val, "Prazo", self.vars[key]['prazo'], 0, 0, "numero")
@@ -483,10 +509,22 @@ class ConsorcioApp:
         self.add_linha_compacta(lf_val, "Crédito Final", self.vars[key]['credito_fim'], 1, 1, "moeda")
         lf_val.columnconfigure(0, weight=1); lf_val.columnconfigure(1, weight=1)
         
+        # --- Botões (Mantido) ---
         btn_frame = ttk.Frame(content, style="Main.TFrame")
         btn_frame.pack(fill='x', pady=10)
         ttk.Button(btn_frame, text="💾 SALVAR LOCALMENTE", style="Sec.TButton", command=lambda: self.gerar_padrao_local(key)).pack(side='left', fill='x', expand=True, padx=(0, 5), ipady=5)
         ttk.Button(btn_frame, text="☁️ ATUALIZAR TABELA AGORA", style="Action.TButton", command=lambda: self.gerar_padrao(key)).pack(side='right', fill='x', expand=True, padx=(5, 0), ipady=5)
+
+        # --- NOVO: Área de Log Visual ---
+        lf_log = ttk.LabelFrame(content, text="LOG DE PROCESSAMENTO", style="Card.TLabelframe", padding=5)
+        lf_log.pack(fill='both', expand=True, pady=(5, 0))
+        
+        txt_log = scrolledtext.ScrolledText(lf_log, height=8, font=("Consolas", 8), state='disabled', bg="#F3F4F6", relief="flat")
+        txt_log.pack(fill='both', expand=True)
+
+        # Registra o widget de log para uso posterior
+        if not hasattr(self, 'tab_logs'): self.tab_logs = {}
+        self.tab_logs[key] = txt_log
 
     def setup_tab_especial(self):
         content = ttk.Frame(self.tab_especial, style="Main.TFrame", padding=10)
@@ -1604,58 +1642,103 @@ class ConsorcioApp:
         dados = {k: {sk: sv.get() for sk, sv in v.items()} for k, v in self.vars.items() if k not in ['pdf','editor', 'msg']}
         salvar_config(dados)
     
-    # --- ALTERADO AQUI PARA SUPORTAR "TODAS" ---
     def gerar_padrao(self, grupo):
         self.salvar_estado_atual()
         d = self.vars[grupo]
         pl_selecionado = d['plano'].get()
+        
+        # Dados para cálculo
+        prazo = d['prazo'].get()
+        cred_ini = d['credito_ini'].get()
+        cred_fim = d['credito_fim'].get()
+        passo = d['passo'].get()
 
-        # Verifica se o usuário selecionou "Todas"
+        # Verifica se o usuário selecionou "Todas" (Lógica Otimizada)
         if pl_selecionado == 'TODAS':
-            # Define quais planos gerar baseado no grupo
+            self.log_tab(grupo, "--- INICIANDO PROCESSO EM LOTE (TODAS) ---")
+            
+            # 1. Baixar o arquivo mestre UMA VEZ
+            self.log_tab(grupo, "⬇️ Baixando arquivo mestre do servidor...")
+            try:
+                full_data = carregar_dados_tabelas() # Retorna {'metadata': [], 'data': {}}
+                if not full_data: full_data = {"metadata": [], "data": {}}
+            except Exception as e:
+                self.log_tab(grupo, f"❌ Erro crítico no download: {str(e)}")
+                messagebox.showerror("Erro Download", f"{e}")
+                return
+
             if grupo == '2011':
                 lista_planos = ['N', 'L', 'SL']
             else: # 5121
                 lista_planos = ['N', 'L']
+            
+            sucessos = []
+            erros = []
+
+            # 2. Calcular e atualizar dicionário localmente
+            for pl in lista_planos:
+                suffix = 'normal' if pl == 'N' else pl
+                prefix = 'imovel' if grupo == '2011' else 'auto'
+                chave = f"t_{prefix}{grupo}_{suffix}"
+                
+                self.log_tab(grupo, f"⚙️ Calculando tabela: {chave}...")
+                try:
+                    res = calcular_simulacao(
+                        grupo, pl, prazo, cred_ini, cred_fim, passo
+                    )
+                    
+                    # Atualiza diretamente na estrutura baixada
+                    if "data" not in full_data: full_data["data"] = {}
+                    full_data["data"][chave] = res
+                    
+                    sucessos.append(chave)
+                    self.log_tab(grupo, f"✅ {chave} calculada com sucesso.")
+                except Exception as e:
+                    msg_err = f"Erro ao calcular {chave}: {str(e)}"
+                    erros.append(msg_err)
+                    self.log_tab(grupo, f"❌ {msg_err}")
+
+            # 3. Enviar arquivo mestre modificado UMA VEZ
+            if sucessos:
+                self.log_tab(grupo, "⬆️ Enviando arquivo consolidado para nuvem...")
+                try:
+                    upload_json_supabase(FILE_DADOS, full_data)
+                    self.log_tab(grupo, "🚀 Upload concluído com sucesso!")
+                    self.log_tab(grupo, "--- FIM DO PROCESSO ---")
+                    
+                    msg_final = f"Processo em lote concluído!\nTabelas atualizadas: {len(sucessos)}"
+                    if erros: msg_final += f"\n\nErros: {len(erros)}"
+                    
+                    self._registrar_log("GERADOR_CLOUD_BATCH", f"Atualizou {grupo} (Todas) via lote otimizado")
+                    messagebox.showinfo("Sucesso Total", msg_final)
+                except Exception as e:
+                    self.log_tab(grupo, f"❌ Falha no Upload: {str(e)}")
+                    messagebox.showerror("Erro Upload", f"{e}")
+            else:
+                self.log_tab(grupo, "⚠️ Nenhuma tabela gerada. Nada a enviar.")
+
         else:
-            lista_planos = [pl_selecionado]
-
-        erros = []
-        sucessos = []
-
-        # Itera sobre os planos para gerar (1 ou todos)
-        for pl in lista_planos:
-            suffix = 'normal' if pl == 'N' else pl
+            # --- MODO SIMPLES (UMA TABELA) ---
+            self.log_tab(grupo, f"--- Iniciando atualização individual: {pl_selecionado} ---")
+            suffix = 'normal' if pl_selecionado == 'N' else pl_selecionado
             prefix = 'imovel' if grupo == '2011' else 'auto'
             chave = f"t_{prefix}{grupo}_{suffix}"
             
             try:
-                # Chama a função de cálculo com o plano específico
+                self.log_tab(grupo, f"Calculando simulação para {chave}...")
                 res = calcular_simulacao(
-                    grupo, 
-                    pl, 
-                    d['prazo'].get(), 
-                    d['credito_ini'].get(), 
-                    d['credito_fim'].get(), 
-                    d['passo'].get()
+                    grupo, pl_selecionado, prazo, cred_ini, cred_fim, passo
                 )
-                salvar_dados_tabelas(chave, res)
-                sucessos.append(chave)
+                
+                self.log_tab(grupo, "Enviando para o servidor...")
+                salvar_dados_tabelas(chave, res) # Usa a função antiga que faz download/upload individual
+                
+                self.log_tab(grupo, f"✅ Tabela {chave} atualizada com sucesso!")
+                self._registrar_log("GERADOR_CLOUD", f"Gerou tabela {chave} para nuvem")
+                messagebox.showinfo("Sucesso", f"Tabela {chave} atualizada no servidor!")
             except Exception as e:
-                erros.append(f"{chave}: {str(e)}")
-
-        # Feedback ao usuário
-        if erros:
-            msg_erro = "\n".join(erros)
-            messagebox.showerror("Erros durante atualização", f"Sucessos: {len(sucessos)}\nFalhas:\n{msg_erro}")
-        else:
-            if len(sucessos) > 1:
-                self._registrar_log("GERADOR_CLOUD_BATCH", f"Gerou tabelas em lote para {grupo}: {', '.join(sucessos)}")
-                messagebox.showinfo("Sucesso Total", f"Todas as tabelas do grupo {grupo} foram atualizadas!\n({', '.join(sucessos)})")
-            else:
-                self._registrar_log("GERADOR_CLOUD", f"Gerou tabela {sucessos[0]} para nuvem")
-                messagebox.showinfo("Sucesso", f"Tabela {sucessos[0]} atualizada no servidor!")
-    # ---------------------------------------------
+                self.log_tab(grupo, f"❌ Erro: {str(e)}")
+                messagebox.showerror("Erro", str(e))
 
     def gerar_padrao_local(self, grupo):
         self.salvar_estado_atual(); d = self.vars[grupo]; pl = d['plano'].get()
@@ -1707,6 +1790,238 @@ class ConsorcioApp:
             self._registrar_log("GERADOR_ESPECIAL_LOCAL", f"Salvou especial em {path}")
             messagebox.showinfo("Salvo", f"Tabela especial salva localmente!")
         except Exception as e: messagebox.showerror("Erro Crítico", f"{str(e)}")
+
+# ==========================================================
+    # --- ABA: USUÁRIOS DO SIMULADOR (SUPABASE AUTH) ---
+    # ==========================================================
+    def get_supabase_client(self):
+        """
+        Retorna a instância do cliente Supabase importada diretamente do json_utils.
+        """
+        try:
+            from json_utils import supabase
+            return supabase
+        except ImportError as e:
+            messagebox.showerror("Erro Crítico", f"Falha ao carregar conexão com Supabase:\n{str(e)}")
+            return None
+
+    def setup_tab_sim_users(self):
+        content = ttk.Frame(self.tab_sim_users, style="Main.TFrame", padding=15)
+        content.pack(fill='both', expand=True)
+
+        paned = tk.PanedWindow(content, orient=tk.HORIZONTAL, bg=COLOR_BG, sashwidth=4, showhandle=True)
+        paned.pack(fill='both', expand=True)
+
+        # === ESQUERDA: Lista de Usuários (Treeview) ===
+        frame_list = ttk.Frame(paned, style="Main.TFrame")
+        paned.add(frame_list, width=400) # Aumentei um pouco a largura para caber a nova coluna
+
+        top_list = ttk.Frame(frame_list, style="Main.TFrame")
+        top_list.pack(side='top', fill='x', pady=(0, 5))
+        ttk.Label(top_list, text="Usuários do Simulador (Auth)", font=("Segoe UI", 10, "bold"), background=COLOR_BG).pack(side='left')
+        
+        self.lbl_sim_users_status = ttk.Label(top_list, text="...", foreground=COLOR_TEXT_SUB, background=COLOR_BG)
+        self.lbl_sim_users_status.pack(side='right')
+
+        # FIX: O botão de atualizar precisa ser "empacotado" no fundo PRIMEIRO para não ser cortado
+        ttk.Button(frame_list, text="🔄 Carregar do Supabase", style="Sec.TButton", command=self.sim_users_refresh).pack(side='bottom', fill='x', pady=(5, 0))
+
+        # Container para a tabela
+        tree_container = ttk.Frame(frame_list)
+        tree_container.pack(side='top', fill='both', expand=True)
+
+        # Tabela de usuários - Nova ordem e nova coluna
+        cols = ("Nome do Usuário", "Email", "Data Criação", "ID")
+        self.tree_sim_users = ttk.Treeview(tree_container, columns=cols, show='headings', selectmode='browse')
+        
+        self.tree_sim_users.heading("Nome do Usuário", text="Nome do Usuário")
+        self.tree_sim_users.heading("Email", text="Email")
+        self.tree_sim_users.heading("Data Criação", text="Criado em")
+        self.tree_sim_users.heading("ID", text="UID")
+        
+        self.tree_sim_users.column("Nome do Usuário", width=120)
+        self.tree_sim_users.column("Email", width=150)
+        self.tree_sim_users.column("Data Criação", width=80)
+        self.tree_sim_users.column("ID", width=50)
+
+        scroll_y = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree_sim_users.yview)
+        self.tree_sim_users.configure(yscrollcommand=scroll_y.set)
+        
+        self.tree_sim_users.pack(side='left', fill='both', expand=True)
+        scroll_y.pack(side='right', fill='y')
+
+        # === DIREITA: Controles ===
+        frame_controls = ttk.Frame(paned, style="Main.TFrame", padding=(15, 0, 0, 0))
+        paned.add(frame_controls)
+
+        # 1. Enviar Convite (Substitui o cadastro de senha)
+        lf_add = ttk.LabelFrame(frame_controls, text="ENVIAR CONVITE DE ACESSO", style="Card.TLabelframe", padding=10)
+        lf_add.pack(fill='x', pady=(0, 15))
+
+        ttk.Label(lf_add, text="Email:").grid(row=0, column=0, sticky='w', pady=2)
+        self.entry_sim_email = ttk.Entry(lf_add, width=30)
+        self.entry_sim_email.grid(row=0, column=1, sticky='we', pady=2, padx=(5,0))
+
+        ttk.Button(lf_add, text="✉️ ENVIAR CONVITE", style="Action.TButton", command=self.sim_users_convidar).grid(row=1, column=0, columnspan=2, pady=(10,0), sticky='we')
+        lf_add.columnconfigure(1, weight=1)
+
+        # 2. Ações do Usuário Selecionado
+        lf_actions = ttk.LabelFrame(frame_controls, text="AÇÕES (Selecione na lista ao lado)", style="Card.TLabelframe", padding=10)
+        lf_actions.pack(fill='x')
+
+        ttk.Button(lf_actions, text="✏️ Alterar Nome", style="Sec.TButton", command=self.sim_users_alterar_nome).pack(fill='x', pady=5)
+        ttk.Button(lf_actions, text="🔄 Forçar Nova Senha", style="Warning.TButton", command=self.sim_users_resetar).pack(fill='x', pady=5)
+        ttk.Button(lf_actions, text="❌ Excluir Usuário", style="Danger.TButton", command=self.sim_users_excluir).pack(fill='x', pady=5)
+
+    # --- LÓGICA DE INTEGRAÇÃO COM SUPABASE ADMIN ---
+    
+    def sim_users_refresh(self):
+        client = self.get_supabase_client()
+        if not client: return
+
+        self.lbl_sim_users_status.config(text="Buscando...", foreground=COLOR_WARNING)
+        self.root.update()
+
+        def _fetch():
+            try:
+                # Busca todos os usuários na Auth do Supabase
+                response = client.auth.admin.list_users()
+                users = response.users if hasattr(response, 'users') else response
+                
+                # Atualiza a UI na thread principal
+                self.root.after(0, lambda: self._update_tree(users))
+            except Exception as e:
+                self.root.after(0, lambda: self._show_error("Erro ao buscar usuários", str(e)))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _update_tree(self, users):
+        for item in self.tree_sim_users.get_children():
+            self.tree_sim_users.delete(item)
+
+        for user in users:
+            created = user.created_at if hasattr(user, 'created_at') else user.get('created_at', '')
+            
+            # Buscando o Display Name de forma segura no metadata do Supabase
+            meta = user.user_metadata if hasattr(user, 'user_metadata') else user.get('user_metadata', {})
+            if not meta: meta = {}
+            nome = meta.get('display_name') or meta.get('name') or meta.get('full_name') or "Sem Nome"
+
+            data_formatada = ""
+            if created:
+                from datetime import datetime 
+                if isinstance(created, datetime):
+                    data_formatada = created.strftime('%d/%m/%Y %H:%M')
+                elif isinstance(created, str):
+                    if 'T' in created:
+                        data_parte = created.split('T')[0]
+                        ano, mes, dia = data_parte.split('-')
+                        data_formatada = f"{dia}/{mes}/{ano}"
+                    else:
+                        data_formatada = created
+
+            # Nova ordem de inserção: Nome, Email, Data, ID
+            self.tree_sim_users.insert('', 'end', values=(
+                nome,
+                user.email, 
+                data_formatada,
+                user.id
+            ))
+            
+        self.lbl_sim_users_status.config(text=f"{len(users)} usuários carregados", foreground="#059669")
+
+    def _show_error(self, title, msg):
+        self.lbl_sim_users_status.config(text="Erro", foreground=COLOR_DANGER)
+        messagebox.showerror(title, msg)
+
+    def sim_users_convidar(self):
+        email = self.entry_sim_email.get().strip()
+
+        if not email:
+            return messagebox.showwarning("Atenção", "Preencha um email válido.")
+
+        client = self.get_supabase_client()
+        if not client: return
+
+        try:
+            # Envia o e-mail mágico de convite do Supabase
+            client.auth.admin.invite_user_by_email(email)
+            self._registrar_log("SUPABASE_INVITE_USER", f"Enviou convite de acesso para: {email}")
+            messagebox.showinfo("Sucesso", f"Convite enviado para o e-mail: {email}!")
+            self.entry_sim_email.delete(0, tk.END)
+            self.sim_users_refresh()
+        except Exception as e:
+            messagebox.showerror("Erro ao Convidar", str(e))
+    def sim_users_alterar_nome(self):
+        sel = self.tree_sim_users.selection()
+        if not sel:
+            return messagebox.showwarning("Atenção", "Selecione um usuário na tabela primeiro.")
+            
+        item = self.tree_sim_users.item(sel[0])
+        nome_atual, email, _, uid = item['values'] # Desempacota as 4 colunas
+
+        novo_nome = simpledialog.askstring(
+            "Alterar Nome", 
+            f"Novo Display Name para {email}:", 
+            initialvalue="" if nome_atual == "Sem Nome" else nome_atual
+        )
+        if not novo_nome: return
+
+        client = self.get_supabase_client()
+        if not client: return
+
+        try:
+            # Atualiza apenas o metadado display_name no Supabase
+            client.auth.admin.update_user_by_id(uid, {"user_metadata": {"display_name": novo_nome}})
+            self._registrar_log("SUPABASE_UPDATE_NAME", f"Alterou o nome de {email} para {novo_nome}")
+            messagebox.showinfo("Sucesso", f"Nome de {email} atualizado para {novo_nome}!")
+            self.sim_users_refresh()
+        except Exception as e:
+            messagebox.showerror("Erro ao Atualizar Nome", str(e))
+
+    def sim_users_excluir(self):
+        sel = self.tree_sim_users.selection()
+        if not sel:
+            return messagebox.showwarning("Atenção", "Selecione um usuário na tabela primeiro.")
+            
+        item = self.tree_sim_users.item(sel[0])
+        nome, email, _, uid = item['values'] # Ajustado para as 4 colunas
+
+        if not messagebox.askyesno("Excluir", f"Tem certeza que deseja EXCLUIR DEFINITIVAMENTE o usuário '{email}' do Supabase?"):
+            return
+
+        client = self.get_supabase_client()
+        if not client: return
+
+        try:
+            client.auth.admin.delete_user(uid)
+            self._registrar_log("SUPABASE_DEL_USER", f"Excluiu usuário do simulador: {email}")
+            messagebox.showinfo("Sucesso", f"Usuário {email} removido.")
+            self.sim_users_refresh()
+        except Exception as e:
+            messagebox.showerror("Erro ao Excluir", str(e))
+
+    def sim_users_resetar(self):
+        sel = self.tree_sim_users.selection()
+        if not sel:
+            return messagebox.showwarning("Atenção", "Selecione um usuário na tabela primeiro.")
+            
+        item = self.tree_sim_users.item(sel[0])
+        nome, email, _, uid = item['values'] # Ajustado para as 4 colunas
+
+        nova_senha = simpledialog.askstring("Nova Senha", f"Digite a nova senha para {email} (mín 6 caracteres):", show='*')
+        if not nova_senha or len(nova_senha) < 6:
+            return messagebox.showwarning("Aviso", "A senha deve ter pelo menos 6 caracteres. Operação cancelada.")
+
+        client = self.get_supabase_client()
+        if not client: return
+
+        try:
+            client.auth.admin.update_user_by_id(uid, {"password": nova_senha})
+            self._registrar_log("SUPABASE_RESET_SENHA", f"Alterou a senha do usuário: {email}")
+            messagebox.showinfo("Sucesso", f"A senha de {email} foi atualizada!")
+        except Exception as e:
+            messagebox.showerror("Erro ao Atualizar Senha", str(e))
 
 def center_root(r):
     r.update_idletasks()

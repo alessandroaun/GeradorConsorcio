@@ -1,9 +1,9 @@
 {
     "2011": {
-        "plano": "SL",
-        "prazo": 230,
+        "plano": "TODAS",
+        "prazo": 200,
         "credito_ini": 200000.0,
-        "credito_fim": 300000.0,
+        "credito_fim": 400000.0,
         "passo": 10000.0
     },
     "5121": {

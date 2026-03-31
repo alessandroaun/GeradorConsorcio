@@ -6,29 +6,26 @@ from tkinter import ttk, messagebox
 from threading import Thread
 
 # --- CONFIGURAÇÃO ---
-# Lembre-se de mudar isso antes de gerar o executável
-CURRENT_VERSION = "1.0.7" 
+CURRENT_VERSION = "1.0.9" 
 
 # URL DO JSON NO SUPABASE
+# Atenção: Notei um erro de digitação no seu link original ("upadates"), mantive como você enviou, 
+# mas verifique se no Supabase a pasta é 'updates' ou 'upadates'.
 URL_VERSION_JSON = "https://nhnejoanmggvinnfphir.supabase.co/storage/v1/object/public/upadates/updates/version.json"
-# (Certifique-se que o caminho acima está correto com o bucket que você criou)
 
 class UpdateManager:
     def __init__(self, root):
         self.root = root
 
     def check_for_updates(self):
-        """Verifica se há atualização (Lógica de Update Obrigatório)"""
+        """Verifica se há atualização"""
         print("--- INICIANDO CHECAGEM DE UPDATE ---")
         try:
-            # 1. Tenta baixar o JSON
             try:
                 response = requests.get(URL_VERSION_JSON, timeout=10)
                 response.raise_for_status() 
                 data = response.json()
             except Exception as e:
-                # Se falhar a internet ou o link, avisa mas deixa entrar (ou bloqueia, dependendo da sua escolha)
-                # Por enquanto, vou deixar entrar se der erro de conexão para não travar a operação se a internet cair.
                 print(f"Erro ao verificar updates: {e}")
                 return False
             
@@ -38,25 +35,18 @@ class UpdateManager:
 
             print(f"Versão Local: {CURRENT_VERSION} | Versão Remota: {latest_version}")
 
-            # 2. Compara versões
             if latest_version != CURRENT_VERSION:
                 if self._is_newer(latest_version, CURRENT_VERSION):
-                    
-                    # --- ALTERAÇÃO AQUI: UPDATE OBRIGATÓRIO ---
-                    
-                    # Exibe aviso (botão único OK)
                     messagebox.showwarning("Atualização Obrigatória", 
                                            f"Uma nova versão ({latest_version}) foi encontrada.\n\n"
                                            f"Mudanças:\n{changelog}\n\n"
                                            "É necessário atualizar para continuar utilizando o sistema.\n"
                                            "Clique em OK para iniciar a atualização.")
                     
-                    # Não pergunta "Sim/Não", executa direto
                     self._download_and_install(download_url)
-                    
-                    return True # Retorna True para avisar o app.py que vai atualizar e deve fechar
+                    return True 
                 
-            return False # Nenhuma atualização, segue o fluxo normal
+            return False 
 
         except Exception as e:
             messagebox.showerror("Erro no Update", f"Ocorreu um erro crítico ao verificar atualizações: {e}")
@@ -75,23 +65,28 @@ class UpdateManager:
         """Baixa e Executa"""
         top = tk.Toplevel(self.root)
         top.title("Atualizando Sistema...")
-        top.geometry("300x150")
+        top.geometry("350x150")
         top.resizable(False, False)
         
-        # Remove o botão de fechar da janela (X) para impedir cancelamento fácil
-        top.protocol("WM_DELETE_WINDOW", lambda: None)
-        
+        # Centralizar
         try:
-            x = self.root.winfo_screenwidth() // 2 - 150
+            x = self.root.winfo_screenwidth() // 2 - 175
             y = self.root.winfo_screenheight() // 2 - 75
             top.geometry(f"+{x}+{y}")
         except: pass
 
-        ttk.Label(top, text="Baixando atualização", font=("Segoe UI", 10, "bold"), foreground="red").pack(pady=10)
-        progress = ttk.Progressbar(top, orient="horizontal", length=250, mode="determinate")
-        progress.pack(pady=10)
-        lbl_status = ttk.Label(top, text="Iniciando...", font=("Segoe UI", 8))
-        lbl_status.pack()
+        # Impede fechar a janela
+        top.protocol("WM_DELETE_WINDOW", lambda: None)
+        
+        lbl_info = ttk.Label(top, text="Baixando atualização...", font=("Segoe UI", 10, "bold"), foreground="blue")
+        lbl_info.pack(pady=(15, 5))
+
+        # Barra de progresso
+        progress = ttk.Progressbar(top, orient="horizontal", length=300, mode="determinate")
+        progress.pack(pady=5)
+        
+        lbl_status = ttk.Label(top, text="0%", font=("Segoe UI", 9))
+        lbl_status.pack(pady=2)
 
         def _thread_dl():
             try:
@@ -99,23 +94,35 @@ class UpdateManager:
                 installer_name = "Setup_Update_Recon.exe"
                 save_path = os.path.join(temp_dir, installer_name)
                 
-                with requests.get(url, stream=True) as r:
+                with requests.get(url, stream=True, timeout=30) as r:
                     r.raise_for_status()
                     total_length = int(r.headers.get('content-length', 0))
+                    
                     dl = 0
+                    last_pct = -1
+                    
                     with open(save_path, 'wb') as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             if chunk:
                                 dl += len(chunk)
                                 f.write(chunk)
+                                
+                                # Atualiza a barra apenas se tiver tamanho total definido
                                 if total_length > 0:
                                     pct = int(100 * dl / total_length)
-                                    top.after(0, lambda p=pct: (progress.config(value=p), lbl_status.config(text=f"{p}%")))
-                
-                top.after(0, lambda: self._launch_installer(save_path))
+                                    # Só atualiza a UI se a porcentagem mudou para não travar
+                                    if pct > last_pct:
+                                        last_pct = pct
+                                        top.after(0, lambda p=pct: (progress.config(value=p), lbl_status.config(text=f"{p}%")))
+                                else:
+                                    # Se o servidor não der o tamanho, deixa em modo indeterminado
+                                    top.after(0, lambda: progress.config(mode='indeterminate'))
+                                    top.after(0, lambda: progress.start(10))
+
+                top.after(0, lambda: lbl_info.config(text="Iniciando Instalador..."))
+                top.after(1000, lambda: self._launch_installer(save_path))
 
             except Exception as e:
-                # Se der erro no download obrigatório, o app fecha. Não pode usar sem atualizar.
                 top.after(0, lambda: messagebox.showerror("Erro Fatal", f"Falha ao baixar atualização: {e}\nO sistema será encerrado."))
                 top.after(0, lambda: sys.exit(0))
 
@@ -134,9 +141,9 @@ class UpdateManager:
 
             os.startfile(installer_path)
             
-            # Fecha o app Python IMEDIATAMENTE
+            # Fecha o app Python IMEDIATAMENTE E FORÇADO
             self.root.destroy()
-            sys.exit(0)
+            os._exit(0) # Força bruta para fechar, garantindo que não fique nada na memória
             
         except Exception as e:
             messagebox.showerror("Erro Crítico", f"Não foi possível iniciar o instalador: {e}")
